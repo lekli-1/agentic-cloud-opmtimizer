@@ -1,0 +1,38 @@
+[project]
+name = "agentic-cloud-optimizer"
+version = "0.1.0"
+description = "Agentic MAPE-K resource optimizer for Kubernetes (Minikube/AKS) and Azure"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.161",
+    "httpx2>=2.16",
+    "prometheus-client>=0.26",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.16",
+    "pyyaml>=6.0.3",
+    "rich>=15",
+    "typer>=0.27",
+    "uvicorn>=0.54",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.1"]
+
+[project.scripts]
+optimizer = "optimizer.cli:app"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/optimizer",
+    "src/event_gateway",
+    "src/workload_app",
+    "src/loadgen",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
