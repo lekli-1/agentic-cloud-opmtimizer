@@ -65,6 +65,20 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Optimizer knowledge store (SQLite + WAL files)
+*.db
+*.db-wal
+*.db-shm
+
+# Terraform state and plans can contain credentials. Commit provider locks only.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+
 # Flask stuff:
 instance/
 .webassets-cache
