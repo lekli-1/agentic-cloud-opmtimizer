@@ -52,6 +52,8 @@ class WorkloadsResponse(Observation):
 Issue = Literal["over_provisioned", "under_provisioned", "memory_risk"]
 Provider = Literal["openai", "fake"]
 RecommendationStatus = Literal["pending", "queued", "executing", "executed", "failed", "dismissed"]
+AnalysisReadinessStatus = Literal["ready", "waiting_for_metrics", "no_issues", "no_changes", "analyzing"]
+AnalysisStatus = Literal["completed", "failed", "no_issues", "waiting_for_metrics", "no_changes"]
 
 # These execution bounds are code-owned, not settings supplied by the model.
 BOUNDS = {"cpu_millicores": (50, 2000), "memory_mib": (64, 2048), "replicas": (1, 5)}
@@ -209,8 +211,24 @@ class LLMCall(BaseModel):
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
 
 
+class AnalysisWait(BaseModel):
+    namespace: str
+    workload: str
+    reason: Literal["queued", "executing", "waiting_for_metrics"]
+    retry_at: datetime | None = None
+
+
+class AnalysisReadiness(BaseModel):
+    status: AnalysisReadinessStatus
+    observed_at: datetime
+    ready_workloads: list[str] = Field(default_factory=list)
+    waiting_workloads: list[AnalysisWait] = Field(default_factory=list)
+    retry_at: datetime | None = None
+    minimum_sized_workloads: list[str] = Field(default_factory=list)
+
+
 class AnalysisResult(BaseModel):
-    status: Literal["completed", "failed", "no_issues"]
+    status: AnalysisStatus
     call_id: str | None = None
     recommendations: list[Recommendation] = Field(default_factory=list)
     invalid_proposals: int = 0
@@ -218,3 +236,6 @@ class AnalysisResult(BaseModel):
     missing_workloads: list[str] = Field(default_factory=list)
     discarded_workloads: list[str] = Field(default_factory=list)
     error: str | None = None
+    waiting_workloads: list[AnalysisWait] = Field(default_factory=list)
+    retry_at: datetime | None = None
+    minimum_sized_workloads: list[str] = Field(default_factory=list)

@@ -5,8 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from optimizer.config import Settings
-from optimizer.detect import detect, missing_detection_data, same_configuration
-from optimizer.models import AnalysisResult, Evidence, Observation
+from optimizer.detect import at_minimum_allocation, detect, missing_detection_data, same_configuration
+from optimizer.models import (
+    AnalysisReadiness, AnalysisReadinessStatus, AnalysisResult, AnalysisStatus, AnalysisWait,
+    Evidence, Observation,
+)
 from optimizer.observe import ObservationState
 from optimizer.recommend import ModelCall, recommend
 from optimizer.store import Store
@@ -56,6 +59,8 @@ class RecommendationService:
         self.restored_attempts: dict[tuple[str, str], Evidence] = {}
         self.incomplete: set[tuple[str, str]] = set()
         self.skipped: set[tuple[str, str]] = set()
+        self.waiting: dict[tuple[str, str], AnalysisWait] = {}
+        self.minimum_sized: set[tuple[str, str]] = set()
         self.lock = asyncio.Lock()
         self.task: asyncio.Task[AnalysisResult] | None = None
         self.error: str | None = None
@@ -71,7 +76,8 @@ class RecommendationService:
 
     async def synchronize(self, snapshot: Observation) -> None:
         """Update issue continuity and retire obsolete pending proposals."""
-        self.skipped = await asyncio.to_thread(self.store.observation_windows, snapshot)
+        self.waiting = await asyncio.to_thread(self.store.observation_windows, snapshot)
+        self.skipped = set(self.waiting)
         if self.state.interrupted:
             for issue in self.active.values():
                 issue.interrupted = True
@@ -85,6 +91,7 @@ class RecommendationService:
             (item.spec.namespace, item.spec.name): item for item in snapshot.workloads
         }
         self.incomplete = set()
+        self.minimum_sized = set()
         for key in list(self.active):
             if key not in workloads:
                 del self.active[key]
@@ -115,6 +122,12 @@ class RecommendationService:
             if not issues:
                 self.active.pop(key, None)
                 continue
+            # Keep the arithmetic issue flag, but do not pay for reductions
+            # when every allocation value is already at its hard minimum.
+            if issues == ["over_provisioned"] and at_minimum_allocation(workload):
+                self.minimum_sized.add(key)
+                self.active.pop(key, None)
+                continue
             attempted = False
             if previous is not None and same_issue(previous.evidence, evidence):
                 attempted = previous.attempted
@@ -137,6 +150,8 @@ class RecommendationService:
                 dismissals[item.id] = "The workload no longer exists"
             elif not same_configuration(spec, current.spec):
                 dismissals[item.id] = "The Deployment resource settings changed"
+            elif key in self.minimum_sized:
+                dismissals[item.id] = "Already at the minimum allowed allocation; no further reduction is possible"
             elif key not in self.incomplete:
                 active = self.active.get(key)
                 if active is None:
@@ -189,24 +204,52 @@ class RecommendationService:
                 issue.interrupted = True
             logger.exception(self.storage_error)
 
+    async def _readiness(self) -> AnalysisReadiness:
+        """Called under the service lock; never starts a model call."""
+        snapshot = self.state.snapshot
+        if snapshot is None or self.state.error is not None:
+            raise ObservationUnavailable(self.state.error or "Waiting for observation")
+        await self.synchronize(snapshot)
+        evidence = self.eligible(snapshot.observed_at, manual=True)
+        if not evidence and self.incomplete:
+            raise ObservationUnavailable("Detection is waiting for complete workload metrics")
+        waiting = list(self.waiting.values())
+        status: AnalysisReadinessStatus
+        if self.task is not None and not self.task.done():
+            status = "analyzing"
+        elif evidence:
+            status = "ready"
+        elif waiting:
+            status = "waiting_for_metrics"
+        elif self.minimum_sized:
+            status = "no_changes"
+        else:
+            status = "no_issues"
+        return AnalysisReadiness(
+            status=status, observed_at=snapshot.observed_at,
+            ready_workloads=[f"{item.workload.spec.namespace}/{item.workload.spec.name}" for item in evidence],
+            waiting_workloads=waiting,
+            retry_at=min((item.retry_at for item in waiting if item.retry_at is not None), default=None),
+            minimum_sized_workloads=[f"{ns}/{name}" for ns, name in sorted(self.minimum_sized)],
+        )
+
+    async def readiness(self) -> AnalysisReadiness:
+        async with self.lock:
+            return await self._readiness()
+
     async def analyze(self) -> AnalysisResult:
-        """Bypass the persistence delay, but still require a usable observation."""
+        """Bypass persistence, but report a normal wait for post-change metrics."""
         async with self.lock:
             if self.task is not None and not self.task.done():
                 raise AnalysisBusy("A recommendation call is already running")
-            snapshot = self.state.snapshot
-            if snapshot is None or self.state.error is not None:
-                raise ObservationUnavailable(self.state.error or "Waiting for observation")
-            await self.synchronize(snapshot)
-            evidence = self.eligible(snapshot.observed_at, manual=True)
-            if not evidence:
-                if self.skipped:
-                    raise ObservationUnavailable(
-                        "Workloads are queued, executing or waiting for a clean metric window"
-                    )
-                if self.incomplete:
-                    raise ObservationUnavailable("Detection is waiting for complete workload metrics")
-                return AnalysisResult(status="no_issues")
+            readiness = await self._readiness()
+            if readiness.status in ("waiting_for_metrics", "no_issues", "no_changes"):
+                return AnalysisResult(
+                    status=readiness.status, waiting_workloads=readiness.waiting_workloads,
+                    retry_at=readiness.retry_at,
+                    minimum_sized_workloads=readiness.minimum_sized_workloads,
+                )
+            evidence = self.eligible(readiness.observed_at, manual=True)
             task = self.start_analysis(evidence)
         # A disconnected HTTP caller must not cancel an already billable call and its log.
         return await asyncio.shield(task)
@@ -244,12 +287,19 @@ class RecommendationService:
                 self.unsaved_call = False
                 self.storage_error = None
                 self.error = call.error
+                status: AnalysisStatus = "completed"
+                if call.status != "succeeded":
+                    status = "failed"
+                elif not recommendations:
+                    status = "no_changes"
                 return AnalysisResult(
-                    status="completed" if call.status == "succeeded" else "failed",
+                    status=status,
                     call_id=call.id, recommendations=current_recommendations,
                     invalid_proposals=call.invalid_proposals, rejections=call.rejections,
                     missing_workloads=call.missing_workloads,
                     discarded_workloads=call.discarded_workloads, error=call.error,
+                    waiting_workloads=list(self.waiting.values()),
+                    minimum_sized_workloads=[f"{ns}/{name}" for ns, name in sorted(self.minimum_sized)],
                 )
         except sqlite3.Error:
             self.unsaved_call = True

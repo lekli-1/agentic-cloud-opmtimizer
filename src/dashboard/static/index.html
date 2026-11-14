@@ -16,9 +16,10 @@
     <p class="warning">Execute changes the live Deployment, even with the fake provider.
       No automatic rollback. Do not run Terraform during execution.</p>
     <div class="toolbar">
-      <button id="analyze" type="button">Analyze now</button>
+      <button id="analyze" type="button" disabled aria-describedby="analysis-readiness">Analyze now</button>
       <span id="health">Connecting...</span>
     </div>
+    <p id="analysis-readiness" class="muted">Checking analysis availability...</p>
     <p class="muted">OpenAI analysis and execution can incur API fees. Prices below are
       requests-based estimates, not actual cloud bills.</p>
     <p id="notice" role="status"></p>

@@ -1,7 +1,7 @@
 import logging
 
 from optimizer.config import Settings
-from optimizer.models import DeploymentSpec, Issue, Workload
+from optimizer.models import BOUNDS, DeploymentSpec, Issue, Workload
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,17 @@ def same_configuration(first: DeploymentSpec, second: DeploymentSpec) -> bool:
     # Readiness changes and metric noise do not describe a new allocation.
     return first.model_dump(exclude={"ready_replicas", "uid", "spec_hash"}) == second.model_dump(
         exclude={"ready_replicas", "uid", "spec_hash"}
+    )
+
+
+def at_minimum_allocation(workload: Workload) -> bool:
+    resources = workload.spec.resources
+    return (
+        resources.cpu_request_millicores == BOUNDS["cpu_millicores"][0]
+        and resources.cpu_limit_millicores == BOUNDS["cpu_millicores"][0]
+        and resources.memory_request_mib == BOUNDS["memory_mib"][0]
+        and resources.memory_limit_mib == BOUNDS["memory_mib"][0]
+        and workload.spec.replicas == BOUNDS["replicas"][0]
     )
 
 

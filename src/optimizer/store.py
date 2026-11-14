@@ -6,7 +6,7 @@ from pathlib import Path
 
 from optimizer.detect import missing_detection_data
 from optimizer.models import (
-    Evidence, ExecutionRecord, LLMCall, Observation, Provider, Recommendation,
+    AnalysisWait, Evidence, ExecutionRecord, LLMCall, Observation, Provider, Recommendation,
     RecommendationStatus, utc_now,
 )
 
@@ -329,9 +329,9 @@ class Store:
             call.status = "failed"
             self.save_execution(item, call)
 
-    def observation_windows(self, snapshot: Observation) -> set[tuple[str, str]]:
+    def observation_windows(self, snapshot: Observation) -> dict[tuple[str, str], AnalysisWait]:
         """Skip approved/mixed windows; save the first complete post-window observation."""
-        skipped: set[tuple[str, str]] = set()
+        waiting: dict[tuple[str, str], AnalysisWait] = {}
         workloads = {(item.spec.namespace, item.spec.name): item for item in snapshot.workloads}
         with self.connection() as connection:
             rows = connection.execute(
@@ -346,7 +346,9 @@ class Store:
                 spec = item.evidence.workload.spec
                 key = (spec.namespace, spec.name)
                 if item.status in ("queued", "executing"):
-                    skipped.add(key)
+                    waiting[key] = AnalysisWait(
+                        namespace=spec.namespace, workload=spec.name, reason=item.status,
+                    )
                     continue
                 if execution.patch_attempted_at is None or execution.finished_at is None:
                     continue
@@ -355,7 +357,17 @@ class Store:
                 if execution.skip_until is not None:
                     cutoff = max(cutoff, execution.skip_until)
                 if snapshot.observed_at < cutoff:
-                    skipped.add(key)
+                    previous = waiting.get(key)
+                    # Several historical runs can refer to this target. Keep the
+                    # latest cutoff without overriding a queued/running approval.
+                    if previous is None or (
+                        previous.reason == "waiting_for_metrics"
+                        and previous.retry_at is not None and cutoff > previous.retry_at
+                    ):
+                        waiting[key] = AnalysisWait(
+                            namespace=spec.namespace, workload=spec.name,
+                            reason="waiting_for_metrics", retry_at=cutoff,
+                        )
                 elif execution.after_observation is None:
                     workload = workloads.get(key)
                     if workload is not None and not missing_detection_data(workload):
@@ -368,4 +380,4 @@ class Store:
                             "UPDATE recommendations SET document = ? WHERE id = ?",
                             (item.model_dump_json(), item.id),
                         )
-        return skipped
+        return waiting

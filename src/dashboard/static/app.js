@@ -7,6 +7,7 @@ let busy = false;
 let refreshing = false;
 let revision = 0;
 let recommendationsReady = false;
+let analysisReadiness = null;
 let actionNotice = "";
 const executionNotices = new Map();
 
@@ -160,10 +161,50 @@ function renderList(container, items, render, emptyText) {
 }
 
 function updateButtons() {
-  byId("analyze").disabled = busy;
+  byId("analyze").disabled = busy || !analysisReadiness
+    || !["ready", "no_issues"].includes(analysisReadiness.status);
   for (const button of document.querySelectorAll("[data-action]")) {
     button.disabled = busy || !recommendationsReady;
   }
+}
+
+function updateAnalysisReadiness() {
+  const node = byId("analysis-readiness");
+  if (!analysisReadiness) {
+    node.textContent = "Analysis availability is unknown. Waiting for a successful refresh.";
+    node.className = "muted";
+    return;
+  }
+  const { status, ready_workloads, waiting_workloads, retry_at, minimum_sized_workloads = [] } = analysisReadiness;
+  let message;
+  if (status === "waiting_for_metrics") {
+    if (retry_at) {
+      const seconds = Math.max(0, Math.ceil((Date.parse(retry_at) - Date.now()) / 1000));
+      message = seconds > 0
+        ? `Collecting fresh post-change metrics. Analysis available in ${Math.floor(seconds / 60)}m ${seconds % 60}s.`
+        : "The metric window has elapsed. Waiting for the next fresh observation.";
+    } else {
+      message = "Changes are queued or executing. Fresh metrics will be collected after they finish.";
+    }
+  } else if (status === "analyzing") {
+    message = "Analysis in progress.";
+  } else if (status === "no_issues") {
+    message = "No issues detected in the latest observation.";
+  } else if (status === "no_changes") {
+    message = "No further reduction possible within safety bounds.";
+  } else {
+    message = `Ready to analyze: ${ready_workloads.join(", ")}.`;
+  }
+  if (waiting_workloads.length) {
+    const skipped = waiting_workloads.map((item) =>
+      `${item.workload} (${item.reason === "waiting_for_metrics" ? "collecting fresh metrics" : item.reason})`);
+    message += ` Temporarily skipping: ${skipped.join(", ")}.`;
+  }
+  if (minimum_sized_workloads.length) {
+    message += ` Already at minimum CPU, memory and replicas: ${minimum_sized_workloads.join(", ")}.`;
+  }
+  node.textContent = message;
+  node.className = status === "waiting_for_metrics" ? "warning" : "muted";
 }
 
 function rememberExecution(item) {
@@ -179,7 +220,7 @@ function rememberExecution(item) {
 function updateNotice() {
   const statuses = [...executionNotices.values()].map((item) =>
     `${item.evidence.workload.spec.name}: ${item.status}.`);
-  byId("notice").textContent = [actionNotice, ...statuses].filter(Boolean).join(" ");
+  byId("notice").textContent = [actionNotice, ...statuses].filter(Boolean).join("\n");
 }
 
 async function refresh() {
@@ -196,15 +237,16 @@ async function refresh() {
       request("/recommendations?limit=100"),
       request("/recommendations?status=executing&limit=1"),
       request("/recommendations?status=queued&limit=1000"),
+      request("/analysis/readiness"),
       ...followed.map((item) => request(`/recommendations/${encodeURIComponent(item.id)}`)),
     ]);
     // A GET started before a click must not overwrite that action's newer state.
     if (currentRevision !== revision) return;
-    const [health, workloads, pending, history, running, queued] = results;
+    const [health, workloads, pending, history, running, queued, readiness] = results;
     byId("health").textContent = health.status === "fulfilled" ? "Healthy" : "Needs attention";
     const labels = [
       "Health", "Workloads (displayed values may be stale)", "Recommendations", "History",
-      "Execution status", "Execution queue",
+      "Execution status", "Execution queue", "Analysis availability",
       ...followed.map((item) => `${item.evidence.workload.spec.name} execution status`),
     ];
     byId("refresh-error").textContent = results.flatMap((result, index) =>
@@ -217,6 +259,8 @@ async function refresh() {
         ? workloadTable(body.workloads) : element("p", "No workloads found.", "muted"));
     }
     recommendationsReady = [pending, history, running, queued].every((result) => result.status === "fulfilled");
+    analysisReadiness = readiness.status === "fulfilled" ? readiness.value : null;
+    updateAnalysisReadiness();
     if (pending.status === "fulfilled") {
       renderList(byId("pending"), pending.value, pendingCard, "No pending recommendations.");
     }
@@ -228,7 +272,7 @@ async function refresh() {
     for (const result of [running, queued]) {
       if (result.status === "fulfilled") result.value.forEach(rememberExecution);
     }
-    for (const result of results.slice(6)) {
+    for (const result of results.slice(7)) {
       if (result.status === "fulfilled") rememberExecution(result.value);
     }
     updateNotice();
@@ -251,6 +295,12 @@ async function performAction(path, label) {
     if (result.execution) {
       rememberExecution(result);
       actionNotice = "";
+    } else if (result.status === "waiting_for_metrics") {
+      actionNotice = "Waiting for fresh post-change metrics. No analysis call was made.";
+    } else if (result.status === "no_changes") {
+      actionNotice = result.call_id
+        ? "No useful changes were proposed within safety bounds."
+        : "No further reduction possible within safety bounds. No analysis call was made.";
     } else {
       actionNotice = result.status === "no_issues" ? "No issues to analyze."
         : `${label}: ${result.status}${result.recommendations ? ` (${result.recommendations.length} recommendations, ${result.invalid_proposals} rejected)` : ""}.`;
@@ -272,3 +322,5 @@ async function performAction(path, label) {
 byId("analyze").addEventListener("click", () => performAction("/analyze", "Analyze"));
 refresh();
 setInterval(refresh, 5000);
+// This only updates the label. The server's next observation decides readiness.
+setInterval(updateAnalysisReadiness, 1000);

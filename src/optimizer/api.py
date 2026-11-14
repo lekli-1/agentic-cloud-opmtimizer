@@ -11,7 +11,9 @@ from fastapi.staticfiles import StaticFiles
 
 from optimizer.config import Settings
 from optimizer.execute import ExecutionService
-from optimizer.models import AnalysisResult, Recommendation, RecommendationStatus, WorkloadsResponse
+from optimizer.models import (
+    AnalysisReadiness, AnalysisResult, Recommendation, RecommendationStatus, WorkloadsResponse,
+)
 from optimizer.observe import ObservationState, Observer, observe_loop
 from optimizer.recommend import ModelCall
 from optimizer.service import AnalysisBusy, ObservationUnavailable, RecommendationService
@@ -96,6 +98,16 @@ def create_app(
         if result.status == "failed":
             raise HTTPException(status_code=502, detail=result.model_dump(mode="json"))
         return result
+
+    @app.get("/analysis/readiness", response_model=AnalysisReadiness)
+    async def analysis_readiness() -> AnalysisReadiness:
+        try:
+            return await service.readiness()
+        except ObservationUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except sqlite3.Error as exc:
+            logger.exception("Unable to read analysis readiness")
+            raise HTTPException(status_code=503, detail="Unable to read SQLite history") from exc
 
     @app.get("/recommendations", response_model=list[Recommendation])
     async def recommendations(

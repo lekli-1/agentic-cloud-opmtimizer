@@ -42,7 +42,7 @@ th { background: #edf1f7; }
 .muted { color: #536176; font-size: .9rem; }
 .warning { background: #fff3d4; color: #694600; padding: .8rem; border-radius: .3rem; }
 .error { color: #a12020; white-space: pre-wrap; overflow-wrap: anywhere; }
-#notice { color: #205a35; }
+#notice { color: #205a35; white-space: pre-line; }
 p:empty { display: none; }
 @media (max-width: 600px) {
   main { padding: 1rem; }

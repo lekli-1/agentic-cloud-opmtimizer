@@ -149,15 +149,20 @@ def call_fake(prompt: str, settings: Settings) -> ModelAnswer:
                 max(memory_limit, math.ceil(peak * 1.25), memory_request), "memory_mib"
             )
             reasons.append("Raise memory allocation above the observed peak.")
+        proposed_resources = {
+            "cpu_request_millicores": cpu_request,
+            "cpu_limit_millicores": cpu_limit,
+            "memory_request_mib": memory_request,
+            "memory_limit_mib": memory_limit,
+        }
+        if proposed_resources == resources.model_dump():
+            continue
         proposals.append(
             {
                 "namespace": workload.spec.namespace,
                 "workload": workload.spec.name,
                 "action": "resize",
-                "cpu_request_millicores": cpu_request,
-                "cpu_limit_millicores": cpu_limit,
-                "memory_request_mib": memory_request,
-                "memory_limit_mib": memory_limit,
+                **proposed_resources,
                 "replicas": replicas,
                 "reason": " ".join(reasons),
                 "risk": "medium" if pressure or memory_risk else "low",
@@ -323,7 +328,9 @@ def recommend(
         if answer.error is not None:
             raise ValueError(answer.error)
         recommendations = validate_proposals(answer.answer, evidence, settings, call)
-        if not recommendations:
+        # An empty batch is an allowed decision to omit every workload. A
+        # nonempty batch whose proposals all failed validation is still an error.
+        if not recommendations and call.invalid_proposals:
             raise ValueError("The provider returned no valid recommendations")
         call.status = "succeeded"
     except ValueError as exc:
