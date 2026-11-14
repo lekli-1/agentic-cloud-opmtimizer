@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloud Optimizer</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Cloud Optimizer</h1>
+      <p>Observe workloads, review recommendations, and approve changes.</p>
+    </header>
+    <p class="warning">Execute changes the live Deployment, even with the fake provider.
+      No automatic rollback. Do not run Terraform during execution.</p>
+    <div class="toolbar">
+      <button id="analyze" type="button">Analyze now</button>
+      <span id="health">Connecting...</span>
+    </div>
+    <p class="muted">OpenAI analysis and execution can incur API fees. Prices below are
+      requests-based estimates, not actual cloud bills.</p>
+    <p id="notice" role="status"></p>
+    <p id="action-error" class="error" role="alert"></p>
+    <p id="refresh-error" class="error" role="alert"></p>
+    <noscript>Enable JavaScript to load metrics and use dashboard actions.</noscript>
+
+    <section aria-labelledby="workloads-heading">
+      <h2 id="workloads-heading">Workloads</h2>
+      <p id="observed" class="muted">Waiting for observation...</p>
+      <p id="observation-error" class="error" role="alert"></p>
+      <div id="workloads"></div>
+    </section>
+    <section aria-labelledby="pending-heading">
+      <h2 id="pending-heading">Pending recommendations</h2>
+      <div id="pending"><p class="muted">Loading...</p></div>
+    </section>
+    <section aria-labelledby="history-heading">
+      <h2 id="history-heading">History</h2>
+      <p class="muted">Latest 100 records. Complete history remains available through the API.</p>
+      <div id="history"><p class="muted">Loading...</p></div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -124,6 +125,11 @@ def deployment_spec(deployment: client.V1Deployment) -> DeploymentSpec:
             memory_request_mib=resource_value(requests, "memory", 1 / 1048576),
             memory_limit_mib=resource_value(limits, "memory", 1 / 1048576),
         ),
+        uid=deployment.metadata.uid,
+        # Ignore status/resourceVersion churn, but detect any desired-spec change.
+        spec_hash=hashlib.sha256(
+            json.dumps(deployment.spec.to_dict(), sort_keys=True).encode()
+        ).hexdigest(),
     )
 
 

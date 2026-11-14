@@ -55,6 +55,7 @@ class RecommendationService:
         self.active: dict[tuple[str, str], TrackedIssue] = {}
         self.restored_attempts: dict[tuple[str, str], Evidence] = {}
         self.incomplete: set[tuple[str, str]] = set()
+        self.skipped: set[tuple[str, str]] = set()
         self.lock = asyncio.Lock()
         self.task: asyncio.Task[AnalysisResult] | None = None
         self.error: str | None = None
@@ -70,6 +71,7 @@ class RecommendationService:
 
     async def synchronize(self, snapshot: Observation) -> None:
         """Update issue continuity and retire obsolete pending proposals."""
+        self.skipped = await asyncio.to_thread(self.store.observation_windows, snapshot)
         if self.state.interrupted:
             for issue in self.active.values():
                 issue.interrupted = True
@@ -91,6 +93,10 @@ class RecommendationService:
                 del self.restored_attempts[key]
         for key, workload in workloads.items():
             previous = self.active.get(key)
+            if key in self.skipped:
+                self.active.pop(key, None)
+                self.restored_attempts.pop(key, None)
+                continue
             if missing_detection_data(workload):
                 logger.warning("%s/%s: incomplete metrics; postponing detection", *key)
                 self.incomplete.add(key)
@@ -194,6 +200,10 @@ class RecommendationService:
             await self.synchronize(snapshot)
             evidence = self.eligible(snapshot.observed_at, manual=True)
             if not evidence:
+                if self.skipped:
+                    raise ObservationUnavailable(
+                        "Workloads are queued, executing or waiting for a clean metric window"
+                    )
                 if self.incomplete:
                     raise ObservationUnavailable("Detection is waiting for complete workload metrics")
                 return AnalysisResult(status="no_issues")
@@ -221,6 +231,7 @@ class RecommendationService:
                     if (
                         self.state.error is None
                         and key not in self.incomplete
+                        and key not in self.skipped
                         and current is not None
                         and same_issue(item, current.evidence)
                         and item.issue_first_seen_at == current.evidence.issue_first_seen_at

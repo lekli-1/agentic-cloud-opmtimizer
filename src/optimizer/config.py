@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     openai_temperature: float | None = Field(default=None, ge=0, le=2)
     openai_timeout_seconds: float = Field(default=30, gt=0)
     openai_max_output_tokens: int = Field(default=2048, ge=256)
+    rollout_timeout_seconds: float = Field(default=180, gt=0)
     openai_input_price_per_million: float | None = Field(default=None, ge=0)
     openai_cached_input_price_per_million: float | None = Field(default=None, ge=0)
     openai_output_price_per_million: float | None = Field(default=None, ge=0)

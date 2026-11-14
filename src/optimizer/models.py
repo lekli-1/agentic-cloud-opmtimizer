@@ -21,6 +21,8 @@ class DeploymentSpec(BaseModel):
     replicas: int = Field(ge=0)
     ready_replicas: int = Field(ge=0)
     resources: Resources
+    uid: str | None = None
+    spec_hash: str | None = None
 
 
 class Metrics(BaseModel):
@@ -49,7 +51,7 @@ class WorkloadsResponse(Observation):
 
 Issue = Literal["over_provisioned", "under_provisioned", "memory_risk"]
 Provider = Literal["openai", "fake"]
-RecommendationStatus = Literal["pending", "executing", "executed", "failed", "dismissed"]
+RecommendationStatus = Literal["pending", "queued", "executing", "executed", "failed", "dismissed"]
 
 # These execution bounds are code-owned, not settings supplied by the model.
 BOUNDS = {"cpu_millicores": (50, 2000), "memory_mib": (64, 2048), "replicas": (1, 5)}
@@ -131,6 +133,20 @@ class Evidence(BaseModel):
     issue_first_seen_at: datetime
 
 
+class ExecutionRecord(BaseModel):
+    call_id: str
+    queued_at: datetime | None = None
+    started_at: datetime | None = None
+    previous_values: DeploymentSpec
+    patch_attempted_at: datetime | None = None
+    applied_at: datetime | None = None
+    finished_at: datetime | None = None
+    skip_until: datetime | None = None
+    summary: str | None = None
+    error: str | None = None
+    after_observation: Observation | None = None
+
+
 class Recommendation(BaseModel):
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utc_now)
@@ -147,6 +163,7 @@ class Recommendation(BaseModel):
     monthly_cost_before_usd: float | None
     monthly_cost_after_usd: float
     monthly_cost_delta_usd: float | None
+    execution: ExecutionRecord | None = None
 
 
 class TokenUsage(BaseModel):
@@ -162,12 +179,22 @@ class ModelAnswer(BaseModel):
     error: str | None = None
 
 
+class ToolCallRecord(BaseModel):
+    call_id: str
+    name: str
+    arguments: str
+    result: str
+    succeeded: bool
+
+
 class LLMCall(BaseModel):
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utc_now)
     provider: Provider
     model: str | None = None
-    status: Literal["succeeded", "failed"] = "failed"
+    kind: Literal["recommend", "execute"] = "recommend"
+    recommendation_id: str | None = None
+    status: Literal["queued", "running", "succeeded", "failed"] = "failed"
     prompt: str
     answer: str | None = None
     evidence: list[Evidence]
@@ -179,6 +206,7 @@ class LLMCall(BaseModel):
     missing_workloads: list[str] = Field(default_factory=list)
     discarded_workloads: list[str] = Field(default_factory=list)
     error: str | None = None
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list)
 
 
 class AnalysisResult(BaseModel):

@@ -19,8 +19,8 @@ def missing_detection_data(workload: Workload) -> list[str]:
 
 def same_configuration(first: DeploymentSpec, second: DeploymentSpec) -> bool:
     # Readiness changes and metric noise do not describe a new allocation.
-    return first.model_dump(exclude={"ready_replicas"}) == second.model_dump(
-        exclude={"ready_replicas"}
+    return first.model_dump(exclude={"ready_replicas", "uid", "spec_hash"}) == second.model_dump(
+        exclude={"ready_replicas", "uid", "spec_hash"}
     )
 
 
