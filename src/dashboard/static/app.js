@@ -87,8 +87,10 @@ function pendingCard(item) {
     element("p", `${item.provider} | ${item.evidence.issues.join(", ")}`, "muted"),
     element("p", item.reason),
     allocationTable(item),
-    element("p", `Estimated monthly cost: ${money(item.monthly_cost_before_usd)} to ${money(item.monthly_cost_after_usd)} (change: ${money(item.monthly_cost_delta_usd)})`),
   );
+  if (item.monthly_cost_after_usd != null) {
+    card.append(element("p", `Estimated monthly cost: ${money(item.monthly_cost_before_usd)} to ${money(item.monthly_cost_after_usd)} (change: ${money(item.monthly_cost_delta_usd)})`));
+  }
   const actions = element("div", null, "actions");
   for (const action of ["execute", "dismiss"]) {
     const button = element("button", action === "execute" ? "Execute" : "Dismiss",
@@ -253,6 +255,14 @@ async function refresh() {
       result.status === "rejected" ? [`${labels[index]}: ${result.reason.message}`] : []).join("\n");
     if (workloads.status === "fulfilled") {
       const body = workloads.value;
+      const costs = body.node_costs;
+      byId("node-costs").hidden = !costs;
+      byId("node-costs").textContent = costs
+        ? `Node compute: $${Number(costs.hourly_usd).toFixed(3)}/hour. ${costs.nodes.map((node) => `${node.name}: ${node.vm_size}, ${node.region}`).join("; ")}.`
+        : "";
+      byId("cost-note").textContent = costs
+        ? "Azure Linux on-demand list prices cover node compute only. Disks, networking and OpenAI calls cost extra. Changing requests alone does not reduce the node bill."
+        : "OpenAI analysis and execution can incur API fees. Prices below are requests-based estimates, not actual cloud bills.";
       byId("observed").textContent = `Observed: ${body.observed_at} | window: ${body.window_seconds}s | refresh: 5s`;
       byId("observation-error").textContent = body.error ? `Observation is stale: ${body.error}` : "";
       byId("workloads").replaceChildren(body.workloads.length

@@ -43,13 +43,22 @@ def build_prompt(evidence: list[Evidence], settings: Settings) -> str:
     """Include only analysis inputs, never the full settings object or its key."""
     return json.dumps(
         {
-            "workloads": [item.model_dump(mode="json") for item in evidence],
+            # Preserve node quotes in evidence, not as a made up LLM values.
+            "workloads": [
+                item.model_dump(mode="json", exclude={"node_costs"}) for item in evidence
+            ],
             "bounds": BOUNDS,
-            "prices_usd": {
+            "prices_usd": None if settings.cost_mode == "azure" else {
                 "per_vcpu_hour": settings.cpu_price_per_vcpu_hour,
                 "per_gib_hour": settings.memory_price_per_gib_hour,
                 "hours_per_month": MONTH_HOURS,
             },
+            "cost_note": (
+                "Changing requests on fixed nodes does not reduce the Azure VM bill. "
+                "Recommend resource changes, not per-workload dollar savings."
+                if settings.cost_mode == "azure"
+                else "Prices are requests-based allocation estimates, not actual cloud bills."
+            ),
         },
         indent=2,
     )
@@ -179,7 +188,7 @@ def monthly_cost(
     cpu_millicores: float | None, memory_mib: float | None, replicas: int, settings: Settings
 ) -> float | None:
     """Attribute monthly cost to requests, not limits or observed usage."""
-    if cpu_millicores is None or memory_mib is None:
+    if settings.cost_mode == "azure" or cpu_millicores is None or memory_mib is None:
         return None
     return MONTH_HOURS * replicas * (
         cpu_millicores / 1000 * settings.cpu_price_per_vcpu_hour
@@ -264,14 +273,15 @@ def validate_proposals(
         after = monthly_cost(
             proposal.cpu_request_millicores, proposal.memory_request_mib, proposal.replicas, settings
         )
-        assert after is not None
         recommendations.append(
             Recommendation(
                 provider=settings.recommendation_provider, llm_call_id=call.id,
                 action=proposal.action, new_values=proposal.allocation(),
                 reason=proposal.reason, risk=proposal.risk, evidence=target,
                 monthly_cost_before_usd=before, monthly_cost_after_usd=after,
-                monthly_cost_delta_usd=None if before is None else after - before,
+                monthly_cost_delta_usd=(
+                    None if before is None or after is None else after - before
+                ),
             )
         )
     accepted = {

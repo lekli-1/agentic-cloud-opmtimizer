@@ -39,10 +39,24 @@ class Workload(BaseModel):
     metrics: Metrics
 
 
+class NodePrice(BaseModel):
+    name: str
+    vm_size: str
+    region: str
+    hourly_usd: float = Field(ge=0, allow_inf_nan=False)
+    checked_at: datetime
+
+
+class NodeCosts(BaseModel):
+    nodes: list[NodePrice] = Field(min_length=1)
+    hourly_usd: float = Field(ge=0, allow_inf_nan=False)
+
+
 class Observation(BaseModel):
     observed_at: datetime
     window_seconds: int
     workloads: list[Workload]
+    node_costs: NodeCosts | None = None
 
 
 class WorkloadsResponse(Observation):
@@ -133,6 +147,7 @@ class Evidence(BaseModel):
     workload: Workload
     issues: list[Issue]
     issue_first_seen_at: datetime
+    node_costs: NodeCosts | None = None
 
 
 class ExecutionRecord(BaseModel):
@@ -163,7 +178,7 @@ class Recommendation(BaseModel):
     risk: Literal["low", "medium", "high"]
     evidence: Evidence
     monthly_cost_before_usd: float | None
-    monthly_cost_after_usd: float
+    monthly_cost_after_usd: float | None
     monthly_cost_delta_usd: float | None
     execution: ExecutionRecord | None = None
 

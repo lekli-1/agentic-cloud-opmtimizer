@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     cpu_underprovisioned_ratio: float = Field(default=0.9, gt=0, le=1)
     cpu_throttling_threshold_percent: float = Field(default=20, ge=0, le=100)
     memory_risk_ratio: float = Field(default=0.85, gt=0, le=1)
+    cost_mode: Literal["fixed", "azure"] = "fixed"
+    azure_price_timeout_seconds: float = Field(default=10, gt=0)
+    azure_price_cache_seconds: float = Field(default=3600, gt=0)
     cpu_price_per_vcpu_hour: float = Field(default=0.037, ge=0)
     memory_price_per_gib_hour: float = Field(default=0.005, ge=0)
     openai_api_key: SecretStr | None = None

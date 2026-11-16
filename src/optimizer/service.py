@@ -118,6 +118,7 @@ class RecommendationService:
             evidence = Evidence(
                 observed_at=snapshot.observed_at, window_seconds=snapshot.window_seconds,
                 workload=workload, issues=issues, issue_first_seen_at=snapshot.observed_at,
+                node_costs=snapshot.node_costs,
             )
             if not issues:
                 self.active.pop(key, None)

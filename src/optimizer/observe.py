@@ -18,6 +18,7 @@ from urllib3.exceptions import HTTPError as KubernetesTransportError
 
 from optimizer.config import Settings
 from optimizer.models import DeploymentSpec, Metrics, Observation, Resources, Workload
+from optimizer.pricing import AzurePrices
 
 logger = logging.getLogger(__name__)
 
@@ -135,11 +136,13 @@ def deployment_spec(deployment: client.V1Deployment) -> DeploymentSpec:
 
 class Observer:
     def __init__(
-        self, settings: Settings, apps: client.AppsV1Api, prometheus: httpx2.Client
+        self, settings: Settings, apps: client.AppsV1Api, prometheus: httpx2.Client,
+        prices: AzurePrices | None = None,
     ) -> None:
         self.settings = settings
         self.apps = apps
         self.prometheus = prometheus
+        self.prices = prices
 
     @classmethod
     def connect(cls, settings: Settings) -> "Observer":
@@ -147,13 +150,21 @@ class Observer:
             config.load_incluster_config()
         else:
             config.load_kube_config()
+        apps = client.AppsV1Api()
+        prices = None
+        if settings.cost_mode == "azure":
+            prices = AzurePrices(
+                settings, client.CoreV1Api(apps.api_client),
+                httpx2.Client(timeout=settings.azure_price_timeout_seconds),
+            )
         return cls(
             settings,
-            client.AppsV1Api(),
+            apps,
             httpx2.Client(
                 base_url=settings.prometheus_url.rstrip("/") + "/",
                 timeout=settings.prometheus_timeout_seconds,
             ),
+            prices,
         )
 
     def collect(self, save_raw: Path | None = None) -> Observation:
@@ -163,6 +174,11 @@ class Observer:
             _request_timeout=self.settings.prometheus_timeout_seconds,
         ).items
         observed_at = datetime.now(timezone.utc)
+        node_costs = None
+        if self.settings.cost_mode == "azure":
+            if self.prices is None:
+                raise ValueError("Azure pricing client is not configured")
+            node_costs = self.prices.collect()
         samples: dict[str, dict[str, float]] = {}
         if save_raw is not None:
             save_raw.mkdir(parents=True, exist_ok=True)
@@ -189,9 +205,12 @@ class Observer:
             observed_at=observed_at,
             window_seconds=self.settings.observe_window_seconds,
             workloads=workloads,
+            node_costs=node_costs,
         )
 
     def close(self) -> None:
+        if self.prices is not None:
+            self.prices.close()
         self.prometheus.close()
         self.apps.api_client.close()
 

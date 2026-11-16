@@ -20,7 +20,7 @@
       <span id="health">Connecting...</span>
     </div>
     <p id="analysis-readiness" class="muted">Checking analysis availability...</p>
-    <p class="muted">OpenAI analysis and execution can incur API fees. Prices below are
+    <p id="cost-note" class="muted">OpenAI analysis and execution can incur API fees. Prices below are
       requests-based estimates, not actual cloud bills.</p>
     <p id="notice" role="status"></p>
     <p id="action-error" class="error" role="alert"></p>
@@ -31,6 +31,7 @@
       <h2 id="workloads-heading">Workloads</h2>
       <p id="observed" class="muted">Waiting for observation...</p>
       <p id="observation-error" class="error" role="alert"></p>
+      <p id="node-costs" class="muted" hidden></p>
       <div id="workloads"></div>
     </section>
     <section aria-labelledby="pending-heading">
