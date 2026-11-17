@@ -2,6 +2,15 @@ name: Publish demo images
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - Dockerfile.optimizer
+      - pyproject.toml
+      - uv.lock
+      - .dockerignore
+      - .github/workflows/publish-images.yml
 
 permissions:
   contents: read

@@ -29,6 +29,16 @@ variable "optimizer_image" {
   type = string
 }
 
+variable "workload_allocations" {
+  description = "Live allocations supplied by aks-update, not a replacement for the reset baseline."
+  type = map(object({
+    replicas = number
+    requests = map(string)
+    limits   = map(string)
+  }))
+  default = {}
+}
+
 variable "recommendation_provider" {
   type    = string
   default = "fake"
@@ -105,11 +115,12 @@ resource "helm_release" "prometheus" {
 }
 
 module "demo" {
-  source             = "../modules/demo"
-  image              = var.workload_image
-  image_pull_policy  = "IfNotPresent"
-  workload_namespace = kubernetes_namespace_v1.workloads.metadata[0].name
-  loadgen_namespace  = kubernetes_namespace_v1.loadgen.metadata[0].name
+  source               = "../modules/demo"
+  image                = var.workload_image
+  image_pull_policy    = "IfNotPresent"
+  workload_namespace   = kubernetes_namespace_v1.workloads.metadata[0].name
+  loadgen_namespace    = kubernetes_namespace_v1.loadgen.metadata[0].name
+  workload_allocations = var.workload_allocations
 }
 
 module "optimizer" {

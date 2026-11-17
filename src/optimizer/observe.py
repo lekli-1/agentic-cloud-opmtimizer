@@ -197,6 +197,13 @@ class Observer:
         for deployment in sorted(deployments, key=lambda item: item.metadata.name):
             spec = deployment_spec(deployment)
             values = {name: samples[name].get(spec.name) for name in samples}
+            throttling = values["cpu_throttling_percent"]
+            # Counter extrapolation/percentage arithmetic can round just above 100%.
+            # Keep genuine out-of-range values invalid rather than clamping them.
+            if throttling is not None and throttling > 100 and math.isclose(
+                throttling, 100, rel_tol=0, abs_tol=1e-9,
+            ):
+                values["cpu_throttling_percent"] = 100.0
             missing = [name for name, value in values.items() if value is None]
             if missing:
                 logger.warning("%s: missing metrics: %s", spec.name, ", ".join(missing))

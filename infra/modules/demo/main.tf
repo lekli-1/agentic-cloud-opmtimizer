@@ -23,6 +23,23 @@ variable "loadgen_namespace" {
   type = string
 }
 
+variable "workload_allocations" {
+  description = "Optional live allocations for image-only updates; empty uses the demo baseline."
+  type = map(object({
+    replicas = number
+    requests = map(string)
+    limits   = map(string)
+  }))
+  default = {}
+
+  validation {
+    condition = length(setsubtract(
+      keys(var.workload_allocations), ["web-api", "cpu-hungry", "idle-app", "mem-cache"],
+    )) == 0
+    error_message = "Allocation overrides must target existing demo workloads."
+  }
+}
+
 locals {
   # Keep the same scenario baseline on Minikube and AKS.
   workloads = {
@@ -35,7 +52,7 @@ locals {
       memory_request = "64Mi", memory_limit = "128Mi", baseline_mb = "0"
     }
     idle-app = {
-      cpu_request    = "1000m", cpu_limit = "1000m"
+      cpu_request    = "250m", cpu_limit = "1000m"
       memory_request = "256Mi", memory_limit = "512Mi", baseline_mb = "0"
     }
     mem-cache = {
@@ -58,7 +75,7 @@ resource "kubernetes_deployment_v1" "workload" {
     labels    = { app = each.key }
   }
   spec {
-    replicas = 1
+    replicas = try(var.workload_allocations[each.key].replicas, 1)
     selector {
       match_labels = { app = each.key }
     }
@@ -79,8 +96,12 @@ resource "kubernetes_deployment_v1" "workload" {
             value = each.value.baseline_mb
           }
           resources {
-            requests = { cpu = each.value.cpu_request, memory = each.value.memory_request }
-            limits   = { cpu = each.value.cpu_limit, memory = each.value.memory_limit }
+            requests = try(var.workload_allocations[each.key].requests, {
+              cpu = each.value.cpu_request, memory = each.value.memory_request,
+            })
+            limits = try(var.workload_allocations[each.key].limits, {
+              cpu = each.value.cpu_limit, memory = each.value.memory_limit,
+            })
           }
           readiness_probe {
             http_get {
