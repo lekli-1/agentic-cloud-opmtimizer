@@ -1,4 +1,4 @@
-name: Publish demo images
+name: Publish container images
 
 on:
   workflow_dispatch:

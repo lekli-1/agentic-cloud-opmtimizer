@@ -84,16 +84,20 @@ class ExecutionRun:
         self.store.save_execution(self.item, self.call)
         return output
 
-    def fake(self) -> str:
-        """Use the same guarded tools, not simulated Kubernetes writes."""
+    def direct(self) -> str:
+        """Fake execution and manual Revert use the real guards without a model."""
         spec = self.item.evidence.workload.spec
         target = {"namespace": spec.namespace, "workload": spec.name}
-        self.call.model = "fake"
+        self.call.model = None if self.call.kind == "revert" else "fake"
         self.call.usage = TokenUsage(input_tokens=0, output_tokens=0)
         self.call.estimated_cost_usd = 0
         self.invoke("get_deployment", json.dumps(target), new_id())
         self.invoke("apply_change", json.dumps(target | self.item.new_values.model_dump()), new_id())
-        return f"Applied the approved {self.item.action} to {spec.name}; rollout completed."
+        action = (
+            "Restored the saved settings" if self.call.kind == "revert"
+            else f"Applied the approved {self.item.action}"
+        )
+        return f"{action} to {spec.name}; rollout completed."
 
     def openai(self, prompt: str) -> str:
         if self.settings.openai_api_key is None:
@@ -186,9 +190,10 @@ class ExecutionRun:
         started = time.monotonic()
         try:
             execution.summary = (
-                self.fake() if self.call.provider == "fake" else self.openai(prompt)
+                self.direct() if self.call.kind == "revert" or self.call.provider == "fake"
+                else self.openai(prompt)
             )
-            if self.call.provider == "fake":
+            if self.call.kind == "revert" or self.call.provider == "fake":
                 self.call.answer = execution.summary
             self.call.status = "succeeded"
         except APIError as exc:
@@ -201,6 +206,7 @@ class ExecutionRun:
         finally:
             self.call.latency_ms = (time.monotonic() - started) * 1000
             execution.finished_at = self.item.updated_at = utc_now()
+            execution.applied_spec = self.tools.applied_spec
             execution.error = self.call.error
             succeeded = self.call.status == "succeeded" and self.tools.rollout_completed
             self.item.status = "executed" if succeeded else "failed"
@@ -229,7 +235,7 @@ class ExecutionService:
         self.storage_error: str | None = None
         self.stopping = False
 
-    async def start(self, recommendation_id: str) -> Recommendation:
+    async def start(self, recommendation_id: str, *, revert: bool = False) -> Recommendation:
         async with self.recommendations.lock:
             if self.storage_error is not None:
                 raise RecommendationConflict(self.storage_error)
@@ -237,6 +243,7 @@ class ExecutionService:
                 raise RecommendationConflict("The execution service is stopping")
             item, call = await asyncio.to_thread(
                 self.store.begin_execution, recommendation_id, self.settings.recommendation_provider,
+                revert=revert,
             )
             if item.status == "executing":
                 self.task = asyncio.create_task(self.generate(item, call))

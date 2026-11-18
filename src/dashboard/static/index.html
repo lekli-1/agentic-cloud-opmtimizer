@@ -13,15 +13,13 @@
       <h1>Cloud Optimizer</h1>
       <p>Observe workloads, review recommendations, and approve changes.</p>
     </header>
-    <p class="warning">Execute changes the live Deployment, even with the fake provider.
-      No automatic rollback. Do not run Terraform during execution.</p>
+    <p class="warning">Execute and Revert change the live Deployment, not Terraform configuration.
+      Applying Terraform can reset these settings to its configured baseline.</p>
     <div class="toolbar">
       <button id="analyze" type="button" disabled aria-describedby="analysis-readiness">Analyze now</button>
       <span id="health">Connecting...</span>
     </div>
     <p id="analysis-readiness" class="muted">Checking analysis availability...</p>
-    <p id="cost-note" class="muted">OpenAI analysis and execution can incur API fees. Prices below are
-      requests-based estimates, not actual cloud bills.</p>
     <p id="notice" role="status"></p>
     <p id="action-error" class="error" role="alert"></p>
     <p id="refresh-error" class="error" role="alert"></p>
@@ -40,7 +38,9 @@
     </section>
     <section aria-labelledby="history-heading">
       <h2 id="history-heading">History</h2>
-      <p class="muted">Latest 100 records. Complete history remains available through the API.</p>
+      <p class="muted">Latest 100 records, newest action first, in your browser's local time.
+        Ignored means automatically retired; dismissed means dismissed by you.
+        Complete history remains available through the API.</p>
       <div id="history"><p class="muted">Loading...</p></div>
     </section>
   </main>

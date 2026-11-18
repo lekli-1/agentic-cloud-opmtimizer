@@ -19,7 +19,7 @@ variable "location" {
 
 variable "name" {
   type    = string
-  default = "optimizer-m1-smoke"
+  default = "cloud-optimizer"
 }
 
 variable "node_vm_size" {
@@ -27,7 +27,7 @@ variable "node_vm_size" {
   default = "Standard_D2as_v4"
 }
 
-# Keep this disposable test separate from local state and any later AKS deployment.
+# Keep the cluster lifecycle separate from local and application state.
 resource "azurerm_resource_group" "smoke" {
   name     = var.name
   location = var.location

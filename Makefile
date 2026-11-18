@@ -1,12 +1,16 @@
-IMAGE_TAG ?= m1-v2
-OPTIMIZER_IMAGE ?= cloud-optimizer:m4-v2
+IMAGE_TAG ?= v1
+OPTIMIZER_IMAGE ?= cloud-optimizer:v1
 AZURE_LOCATION ?= spaincentral
-AZURE_NAME ?= optimizer-m1-smoke
+AZURE_NAME ?= cloud-optimizer
+AKS_KUBECONFIG ?= $(HOME)/.kube/cloud-optimizer.config
+AKS_CONTEXT ?= cloud-optimizer
+AKS_DASHBOARD_PORT ?= 8001
 LOCAL_TF = terraform -chdir=infra/local
 AZURE_TF = terraform -chdir=infra/azure
 OPTIMIZER_TF = terraform -chdir=infra/optimizer-local
+AKS_KUBECTL = kubectl --kubeconfig="$(AKS_KUBECONFIG)" --context="$(AKS_CONTEXT)"
 
-.PHONY: setup sync minikube infra-init adopt-monitoring build plan deploy prometheus observe dashboard test record smoke-openai azure-init azure-quota azure-plan azure-apply azure-destroy optimizer-init optimizer-build optimizer-plan optimizer-deploy optimizer-dashboard
+.PHONY: setup sync minikube infra-init adopt-monitoring build plan deploy prometheus observe dashboard test record smoke-openai azure-init azure-quota azure-plan azure-apply azure-destroy optimizer-init optimizer-build optimizer-plan optimizer-deploy optimizer-dashboard aks-dashboard aks-update
 
 setup:
 	$(MAKE) sync
@@ -84,3 +88,23 @@ optimizer-deploy:
 
 optimizer-dashboard:
 	kubectl --context=minikube -n optimizer port-forward svc/optimizer 8000:8000
+
+aks-update:
+	uv run python scripts/update_aks.py --kubeconfig="$(AKS_KUBECONFIG)" --context="$(AKS_CONTEXT)"
+
+# Avoid port-forward resets; cache deployed assets at the HTTP proxy's rewritten URLs.
+aks-dashboard:
+	@set -eu; \
+	umask 077; \
+	assets="$$(mktemp -d)"; \
+	trap 'rm -f "$$assets/app.js" "$$assets/styles.css"; rmdir "$$assets"' EXIT; \
+	trap 'exit 130' INT; \
+	trap 'exit 143' TERM; \
+	service_path=/api/v1/namespaces/optimizer/services/http:optimizer:8000/proxy; \
+	for file in app.js styles.css; do \
+		$(AKS_KUBECTL) get --raw "$$service_path/static/$$file" > "$$assets/$$file"; \
+	done; \
+	server="$$($(AKS_KUBECTL) config view --minify -o jsonpath='{.clusters[0].cluster.server}')"; \
+	$(AKS_KUBECTL) --server="$${server%/}$$service_path" proxy \
+		--append-server-path=true --port="$(AKS_DASHBOARD_PORT)" --address=127.0.0.1 \
+		--www="$$assets" --www-prefix="$$service_path/static/"

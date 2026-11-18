@@ -19,7 +19,7 @@ variable "kubeconfig_path" {
 
 variable "workload_image" {
   type    = string
-  default = "dummy-app:m1-v2"
+  default = "dummy-app:v1"
 }
 
 provider "kubernetes" {

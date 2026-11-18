@@ -3,11 +3,12 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from optimizer.detect import missing_detection_data
 from optimizer.models import (
-    AnalysisWait, Evidence, ExecutionRecord, LLMCall, Observation, Provider, Recommendation,
-    RecommendationStatus, utc_now,
+    Allocation, AnalysisWait, Evidence, ExecutionRecord, LLMCall, Metrics, Observation,
+    Provider, Recommendation, RecommendationStatus, Workload, utc_now,
 )
 
 
@@ -87,14 +88,26 @@ class Store:
             """)
 
     def recommendations(
-        self, status: RecommendationStatus | None = None, limit: int | None = 100, offset: int = 0
+        self, status: RecommendationStatus | None = None, limit: int | None = 100, offset: int = 0,
+        *, order_by: Literal["created_at", "activity_at"] = "created_at",
     ) -> list[Recommendation]:
         query = "SELECT document FROM recommendations"
         parameters: list[str | int] = []
         if status is not None:
             query += " WHERE status = ?"
             parameters.append(status)
-        query += " ORDER BY created_at DESC, id"
+        if order_by == "activity_at":
+            # Execution times exclude later metric/link bookkeeping. Normalize
+            # UTC suffixes without losing sub-second ordering precision.
+            query += """ ORDER BY REPLACE(COALESCE(
+                json_extract(document, '$.execution.finished_at'),
+                json_extract(document, '$.execution.started_at'),
+                json_extract(document, '$.execution.queued_at'),
+                json_extract(document, '$.updated_at'),
+                created_at
+            ), 'Z', '+00:00') DESC, created_at DESC, id"""
+        else:
+            query += " ORDER BY created_at DESC, id"
         if limit is not None:
             query += " LIMIT ? OFFSET ?"
             parameters.extend([limit, offset])
@@ -214,8 +227,86 @@ class Store:
             self._dismiss(connection, item, "Dismissed by the user", utc_now())
         return self.recommendation(recommendation_id)
 
+    def _create_revert(
+        self, connection: sqlite3.Connection, original: Recommendation,
+    ) -> Recommendation:
+        """Create one linked restore operation inside the approval transaction."""
+        execution = original.execution
+        if original.status != "executed" or execution is None:
+            raise RecommendationConflict("Only successful executions can be reverted")
+        if original.reverts_id is not None:
+            raise RecommendationConflict("A Revert cannot itself be reverted")
+        if original.revert_id is not None:
+            raise RecommendationConflict(
+                "Revert already requested; check its history before changing anything"
+            )
+        applied = execution.applied_spec
+        if applied is None or applied.uid is None or applied.spec_hash is None:
+            raise RecommendationConflict(
+                "This execution predates saved post-change evidence and cannot be reverted"
+            )
+        if connection.execute(
+            "SELECT 1 FROM recommendations WHERE namespace = ? AND workload = ? "
+            "AND id != ? AND json_extract(document, '$.execution.patch_attempted_at') > ? LIMIT 1",
+            (applied.namespace, applied.name, original.id,
+             execution.model_dump(mode="json")["finished_at"]),
+        ).fetchone():
+            raise RecommendationConflict(
+                "A later change was attempted for this workload; this execution is no longer revertible"
+            )
+        previous = execution.previous_values
+        try:
+            # Kubernetes quantities are floats here; accept exact integers, never round.
+            allocation = Allocation.model_validate(
+                previous.resources.model_dump() | {"replicas": previous.replicas},
+                strict=False,
+            )
+        except ValueError as exc:
+            raise RecommendationConflict(
+                "The saved previous settings cannot be restored within the current safety bounds"
+            ) from exc
+        now = utc_now()
+        # A restore needs the saved spec, not fresh telemetry; never reuse old metrics as new.
+        item = Recommendation(
+            status="queued", provider="manual", llm_call_id=original.llm_call_id,
+            action=original.action, new_values=allocation, risk=original.risk,
+            reason=f"Restore the settings saved before execution {original.id}.",
+            reverts_id=original.id,
+            evidence=Evidence(
+                observed_at=now, window_seconds=original.evidence.window_seconds,
+                workload=Workload(spec=applied.model_copy(deep=True), metrics=Metrics()),
+                issues=[], issue_first_seen_at=now,
+            ),
+            monthly_cost_before_usd=None, monthly_cost_after_usd=None,
+            monthly_cost_delta_usd=None,
+        )
+        original.revert_id = item.id
+        original.updated_at = now
+        connection.execute(
+            "UPDATE recommendations SET document = ? WHERE id = ?",
+            (original.model_dump_json(), original.id),
+        )
+        connection.execute(
+            "INSERT INTO recommendations "
+            "(id, namespace, workload, status, created_at, llm_call_id, document) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (item.id, applied.namespace, applied.name, item.status,
+             item.created_at.isoformat(), item.llm_call_id, item.model_dump_json()),
+        )
+        pending = connection.execute(
+            "SELECT document FROM recommendations "
+            "WHERE namespace = ? AND workload = ? AND status = 'pending'",
+            (applied.namespace, applied.name),
+        ).fetchone()
+        if pending is not None:
+            self._dismiss(
+                connection, Recommendation.model_validate_json(pending["document"]),
+                "Revert approved for this workload", now,
+            )
+        return item
+
     def begin_execution(
-        self, recommendation_id: str, provider: Provider,
+        self, recommendation_id: str, provider: Provider, *, revert: bool = False,
     ) -> tuple[Recommendation, LLMCall]:
         """Approve once; start immediately or persist it behind earlier approvals."""
         with self.connection() as connection:
@@ -226,14 +317,18 @@ class Store:
             if row is None:
                 raise RecommendationNotFound("Recommendation not found")
             item = Recommendation.model_validate_json(row["document"])
-            if item.status != "pending":
+            if revert:
+                item = self._create_revert(connection, item)
+            elif item.status != "pending":
                 raise RecommendationConflict("Only pending recommendations can be executed")
             waiting = connection.execute(
-                "SELECT 1 FROM recommendations WHERE status IN ('queued', 'executing') LIMIT 1"
+                "SELECT 1 FROM recommendations "
+                "WHERE status IN ('queued', 'executing') AND id != ? LIMIT 1", (item.id,),
             ).fetchone() is not None
             now = utc_now()
             call = LLMCall(
-                provider=provider, kind="execute", recommendation_id=item.id,
+                provider="manual" if revert else provider,
+                kind="revert" if revert else "execute", recommendation_id=item.id,
                 status="queued" if waiting else "running", prompt="", evidence=[item.evidence],
             )
             item.status = "queued" if waiting else "executing"
@@ -368,12 +463,13 @@ class Store:
                             namespace=spec.namespace, workload=spec.name,
                             reason="waiting_for_metrics", retry_at=cutoff,
                         )
-                elif execution.after_observation is None:
+                elif execution.after_observation is None and item.revert_id is None:
                     workload = workloads.get(key)
                     if workload is not None and not missing_detection_data(workload):
                         execution.after_observation = Observation(
                             observed_at=snapshot.observed_at,
                             window_seconds=snapshot.window_seconds, workloads=[workload],
+                            node_costs=snapshot.node_costs,
                         )
                         item.updated_at = utc_now()
                         connection.execute(

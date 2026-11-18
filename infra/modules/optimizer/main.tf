@@ -11,6 +11,12 @@ variable "image" {
   type = string
 }
 
+variable "enabled" {
+  description = "Pause the optimizer without deleting its history volume."
+  type        = bool
+  default     = true
+}
+
 variable "image_pull_policy" {
   type    = string
   default = "IfNotPresent"
@@ -158,7 +164,7 @@ resource "kubernetes_deployment_v1" "optimizer" {
     }
   }
   spec {
-    replicas = 1
+    replicas = var.enabled ? 1 : 0
     # SQLite and the execution queue must never have overlapping workers.
     strategy {
       type = "Recreate"

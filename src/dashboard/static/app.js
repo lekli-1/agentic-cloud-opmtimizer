@@ -3,6 +3,7 @@
 const byId = (id) => document.getElementById(id);
 const number = (value) => value == null ? "Unknown" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 const money = (value) => value == null ? "Unknown" : `$${Number(value).toFixed(2)}`;
+const dateTime = (value) => new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
 let busy = false;
 let refreshing = false;
 let revision = 0;
@@ -74,8 +75,20 @@ function allocationTable(item) {
     memory_limit_mib: "Memory limit (MiB)",
     replicas: "Replicas",
   };
-  return table(["Value (resources per replica)", "At analysis", "Proposed"],
+  return table(["Value (resources per replica)", item.reverts_id ? "Before Revert" : "At analysis",
+    item.reverts_id ? "Restore" : "Proposed"],
     Object.entries(labels).map(([key, label]) => [label, number(before[key]), number(item.new_values[key])]));
+}
+
+function actionButton(item, action, label) {
+  const button = element("button", label, action === "execute" ? "" : "secondary");
+  button.type = "button";
+  button.dataset.action = action;
+  button.addEventListener("click", () => performAction(
+    `/recommendations/${encodeURIComponent(item.id)}/${action}`,
+    `${item.evidence.workload.spec.name}: ${action}`,
+  ));
+  return button;
 }
 
 function pendingCard(item) {
@@ -93,22 +106,23 @@ function pendingCard(item) {
   }
   const actions = element("div", null, "actions");
   for (const action of ["execute", "dismiss"]) {
-    const button = element("button", action === "execute" ? "Execute" : "Dismiss",
-      action === "dismiss" ? "secondary" : "");
-    button.type = "button";
-    button.dataset.action = action;
-    button.addEventListener("click", () => performAction(
-      `/recommendations/${encodeURIComponent(item.id)}/${action}`, `${name}: ${action}`,
-    ));
-    actions.append(button);
+    actions.append(actionButton(item, action, action === "execute" ? "Execute" : "Dismiss"));
   }
   card.append(actions);
   return card;
 }
 
+function activityTime(item) {
+  const run = item.execution;
+  return run?.finished_at ?? run?.started_at ?? run?.queued_at ?? item.updated_at ?? item.created_at;
+}
+
 function historyCard(item) {
   const card = element("details");
-  card.append(element("summary", `${item.evidence.workload.spec.name} - ${item.status} - ${item.created_at}`),
+  // Automatic retirement and explicit dismissal share the stored status.
+  const status = item.status === "dismissed" && item.dismissed_reason !== "Dismissed by the user"
+    ? "ignored" : item.status;
+  card.append(element("summary", `${item.evidence.workload.spec.name} - ${item.reverts_id ? "Revert - " : ""}${status} - ${dateTime(activityTime(item))}`),
     element("p", item.reason), allocationTable(item));
   if (item.dismissed_reason) card.append(element("p", item.dismissed_reason, "muted"));
   const run = item.execution;
@@ -116,19 +130,33 @@ function historyCard(item) {
   if (run.error) card.append(element("p", run.error, "error"));
   if (run.summary) card.append(element("p", run.summary));
   if (run.applied_at) {
-    card.append(element("p", `Patch confirmed: ${run.applied_at}`, "muted"));
+    card.append(element("p", `Patch confirmed: ${dateTime(run.applied_at)}`, "muted"));
   } else if (run.patch_attempted_at) {
     card.append(element("p", "Patch attempted but not confirmed. Check the live Deployment before retrying.", "warning"));
   }
   if (run.after_observation) {
     card.append(element("h3", "Before execution"), workloadTable([item.evidence.workload]),
       element("h3", "First complete observation after the metric window"),
-      element("p", run.after_observation.observed_at, "muted"),
+      element("p", dateTime(run.after_observation.observed_at), "muted"),
       workloadTable(run.after_observation.workloads));
+  } else if (item.revert_id) {
+    card.append(element("p", "After-window not recorded because Revert was requested.", "muted"));
   } else if (run.skip_until) {
-    card.append(element("p", `Waiting for a clean metric window after ${run.skip_until}.`, "muted"));
+    card.append(element("p", `Waiting for a clean metric window after ${dateTime(run.skip_until)}.`, "muted"));
   }
-  card.append(element("p", `Execution call log: ${run.call_id}`, "muted"));
+  if (item.reverts_id) {
+    card.append(element("p", `Reverts execution ${item.reverts_id}. No model call or pre-Revert telemetry collection.`, "muted"));
+  } else if (item.revert_id) {
+    card.append(element("p", `Revert entry: ${item.revert_id}`, "muted"));
+  } else if (item.status === "executed") {
+    if (run.applied_spec) {
+      card.append(actionButton(item, "revert", "Revert"),
+        element("p", "Restore the saved pre-execution resources and replica count. Later Deployment changes will be rejected.", "muted"));
+    } else {
+      card.append(element("p", "Revert unavailable: this older execution has no saved post-change fingerprint.", "muted"));
+    }
+  }
+  card.append(element("p", `Operation log: ${run.call_id}`, "muted"));
   return card;
 }
 
@@ -170,6 +198,11 @@ function updateButtons() {
   }
 }
 
+function remainingTime(until) {
+  const seconds = Math.max(0, Math.ceil((Date.parse(until) - Date.now()) / 1000));
+  return seconds > 0 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : null;
+}
+
 function updateAnalysisReadiness() {
   const node = byId("analysis-readiness");
   if (!analysisReadiness) {
@@ -181,9 +214,9 @@ function updateAnalysisReadiness() {
   let message;
   if (status === "waiting_for_metrics") {
     if (retry_at) {
-      const seconds = Math.max(0, Math.ceil((Date.parse(retry_at) - Date.now()) / 1000));
-      message = seconds > 0
-        ? `Collecting fresh post-change metrics. Analysis available in ${Math.floor(seconds / 60)}m ${seconds % 60}s.`
+      const remaining = remainingTime(retry_at);
+      message = remaining
+        ? `Collecting fresh post-change metrics. Analysis available in ${remaining}.`
         : "The metric window has elapsed. Waiting for the next fresh observation.";
     } else {
       message = "Changes are queued or executing. Fresh metrics will be collected after they finish.";
@@ -198,8 +231,18 @@ function updateAnalysisReadiness() {
     message = `Ready to analyze: ${ready_workloads.join(", ")}.`;
   }
   if (waiting_workloads.length) {
-    const skipped = waiting_workloads.map((item) =>
-      `${item.workload} (${item.reason === "waiting_for_metrics" ? "collecting fresh metrics" : item.reason})`);
+    const skipped = waiting_workloads.map((item) => {
+      let reason = item.reason;
+      if (reason === "waiting_for_metrics") {
+        reason = "collecting fresh metrics";
+        if (item.retry_at) {
+          const remaining = remainingTime(item.retry_at);
+          reason = remaining ? `collecting fresh metrics: ${remaining} remaining`
+            : "waiting for the next fresh observation";
+        }
+      }
+      return `${item.workload} (${reason})`;
+    });
     message += ` Temporarily skipping: ${skipped.join(", ")}.`;
   }
   if (minimum_sized_workloads.length) {
@@ -221,7 +264,7 @@ function rememberExecution(item) {
 
 function updateNotice() {
   const statuses = [...executionNotices.values()].map((item) =>
-    `${item.evidence.workload.spec.name}: ${item.status}.`);
+    `${item.evidence.workload.spec.name}: ${item.reverts_id ? "revert " : ""}${item.status}.`);
   byId("notice").textContent = [actionNotice, ...statuses].filter(Boolean).join("\n");
 }
 
@@ -236,7 +279,7 @@ async function refresh() {
     const results = await Promise.allSettled([
       request("/health"), request("/workloads"),
       request("/recommendations?status=pending&limit=1000"),
-      request("/recommendations?limit=100"),
+      request("/recommendations?order_by=activity_at&limit=100"),
       request("/recommendations?status=executing&limit=1"),
       request("/recommendations?status=queued&limit=1000"),
       request("/analysis/readiness"),
@@ -260,9 +303,6 @@ async function refresh() {
       byId("node-costs").textContent = costs
         ? `Node compute: $${Number(costs.hourly_usd).toFixed(3)}/hour. ${costs.nodes.map((node) => `${node.name}: ${node.vm_size}, ${node.region}`).join("; ")}.`
         : "";
-      byId("cost-note").textContent = costs
-        ? "Azure Linux on-demand list prices cover node compute only. Disks, networking and OpenAI calls cost extra. Changing requests alone does not reduce the node bill."
-        : "OpenAI analysis and execution can incur API fees. Prices below are requests-based estimates, not actual cloud bills.";
       byId("observed").textContent = `Observed: ${body.observed_at} | window: ${body.window_seconds}s | refresh: 5s`;
       byId("observation-error").textContent = body.error ? `Observation is stale: ${body.error}` : "";
       byId("workloads").replaceChildren(body.workloads.length

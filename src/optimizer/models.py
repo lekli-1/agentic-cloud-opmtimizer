@@ -155,6 +155,7 @@ class ExecutionRecord(BaseModel):
     queued_at: datetime | None = None
     started_at: datetime | None = None
     previous_values: DeploymentSpec
+    applied_spec: DeploymentSpec | None = None
     patch_attempted_at: datetime | None = None
     applied_at: datetime | None = None
     finished_at: datetime | None = None
@@ -170,7 +171,7 @@ class Recommendation(BaseModel):
     updated_at: datetime = Field(default_factory=utc_now)
     status: RecommendationStatus = "pending"
     dismissed_reason: str | None = None
-    provider: Provider
+    provider: Provider | Literal["manual"]
     llm_call_id: str
     action: Literal["resize", "scale"]
     new_values: Allocation
@@ -181,6 +182,8 @@ class Recommendation(BaseModel):
     monthly_cost_after_usd: float | None
     monthly_cost_delta_usd: float | None
     execution: ExecutionRecord | None = None
+    reverts_id: str | None = None
+    revert_id: str | None = None
 
 
 class TokenUsage(BaseModel):
@@ -205,11 +208,13 @@ class ToolCallRecord(BaseModel):
 
 
 class LLMCall(BaseModel):
+    """Shared audit storage for model calls and deterministic manual Revert."""
+
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utc_now)
-    provider: Provider
+    provider: Provider | Literal["manual"]
     model: str | None = None
-    kind: Literal["recommend", "execute"] = "recommend"
+    kind: Literal["recommend", "execute", "revert"] = "recommend"
     recommendation_id: str | None = None
     status: Literal["queued", "running", "succeeded", "failed"] = "failed"
     prompt: str

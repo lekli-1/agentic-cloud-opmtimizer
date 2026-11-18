@@ -15,7 +15,13 @@ variable "kubeconfig_path" {
 
 variable "optimizer_image" {
   type    = string
-  default = "cloud-optimizer:m4-v2"
+  default = "cloud-optimizer:v1"
+}
+
+variable "enabled" {
+  description = "Disable before running the laptop optimizer against the same cluster."
+  type        = bool
+  default     = true
 }
 
 variable "recommendation_provider" {
@@ -42,6 +48,7 @@ provider "kubernetes" {
 # Separate state prevents deploying the agent from resetting demo allocations.
 module "optimizer" {
   source                  = "../modules/optimizer"
+  enabled                 = var.enabled
   image                   = var.optimizer_image
   image_pull_policy       = "Never"
   storage_class           = "standard"

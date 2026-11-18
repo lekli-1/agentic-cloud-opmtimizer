@@ -18,7 +18,7 @@ variable "kubeconfig_path" {
 
 variable "kube_context" {
   type    = string
-  default = "optimizer-m4"
+  default = "cloud-optimizer"
 }
 
 variable "workload_image" {

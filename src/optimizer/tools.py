@@ -56,6 +56,7 @@ class DeploymentTools:
         self.read_completed = False
         self.patch_attempted = False
         self.applied = False
+        self.applied_spec: DeploymentSpec | None = None
         self.rollout_completed = False
 
     def check_target(self, namespace: str, workload: str) -> None:
@@ -156,6 +157,7 @@ class DeploymentTools:
         self.applied = True
         self.on_patch(True)
         self.check_result(patched, previous)
+        self.applied_spec = deployment_spec(patched)
         self.wait_for_rollout(patched)
         self.rollout_completed = True
         return {"status": "executed", "values": values.model_dump(), "completed_at": utc_now().isoformat()}
@@ -204,6 +206,7 @@ class DeploymentTools:
                     and status.available_replicas == expected.replicas
                     and not status.unavailable_replicas
                 ):
+                    self.applied_spec = current
                     return
             time.sleep(min(1, max(0, deadline - time.monotonic())))
         raise ExecutionError("Timed out waiting for rollout; the patch may already be applied")

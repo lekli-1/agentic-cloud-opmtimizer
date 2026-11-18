@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -114,9 +115,12 @@ def create_app(
         status: RecommendationStatus | None = None,
         limit: int = Query(default=100, ge=1, le=1000),
         offset: int = Query(default=0, ge=0),
+        order_by: Literal["created_at", "activity_at"] = "created_at",
     ) -> list[Recommendation]:
         try:
-            return await asyncio.to_thread(database.recommendations, status, limit, offset)
+            return await asyncio.to_thread(
+                database.recommendations, status, limit, offset, order_by=order_by,
+            )
         except sqlite3.Error as exc:
             logger.exception("Unable to read recommendations")
             raise HTTPException(status_code=503, detail="Unable to read SQLite history") from exc
@@ -131,13 +135,15 @@ def create_app(
             logger.exception("Unable to read recommendation")
             raise HTTPException(status_code=503, detail="Unable to read SQLite history") from exc
 
-    async def change_recommendation(recommendation_id: str, *, execute: bool) -> Recommendation:
+    async def change_recommendation(
+        recommendation_id: str, *, action: Literal["execute", "dismiss", "revert"],
+    ) -> Recommendation:
         if executor is None:
             raise HTTPException(status_code=503, detail="Execution service is not ready")
         try:
-            if execute:
-                return await executor.start(recommendation_id)
-            return await executor.dismiss(recommendation_id)
+            if action == "dismiss":
+                return await executor.dismiss(recommendation_id)
+            return await executor.start(recommendation_id, revert=action == "revert")
         except RecommendationNotFound as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except RecommendationConflict as exc:
@@ -151,11 +157,18 @@ def create_app(
         response_model=Recommendation, status_code=202,
     )
     async def execute(recommendation_id: str) -> Recommendation:
-        return await change_recommendation(recommendation_id, execute=True)
+        return await change_recommendation(recommendation_id, action="execute")
+
+    @app.post(
+        "/recommendations/{recommendation_id}/revert",
+        response_model=Recommendation, status_code=202,
+    )
+    async def revert(recommendation_id: str) -> Recommendation:
+        return await change_recommendation(recommendation_id, action="revert")
 
     @app.post("/recommendations/{recommendation_id}/dismiss", response_model=Recommendation)
     async def dismiss(recommendation_id: str) -> Recommendation:
-        return await change_recommendation(recommendation_id, execute=False)
+        return await change_recommendation(recommendation_id, action="dismiss")
 
     return app
 
