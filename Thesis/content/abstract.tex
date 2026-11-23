@@ -8,7 +8,27 @@
 %----------------------------------------------------------------------------
 \chapter*{Kivonat}\addcontentsline{toc}{chapter}{Kivonat}
 
-Jelen dokumentum egy diplomaterv sablon, amely formai keretet ad a BME Villamosmérnöki és Informatikai Karán végző hallgatók által elkészítendő szakdolgozatnak és diplomatervnek. A sablon használata opcionális. Ez a sablon \LaTeX~alapú, a \emph{TeXLive} \TeX-implementációval és a PDF-\LaTeX~fordítóval működőképes.
+A mai világban egyre jobban terjed el, hogy az interneten elérhető szolgáltatások
+ szerver alapú monolítikus architektúra helyett felhő alapú 
+ infrastruktúrában kerülnek üzembehelyezésre.
+ A Cloud Native Computing Foundation (CNCF) hivatalos definíciója \cite{CNCF} szerint
+ a felhőnatív technológiák lehetővé teszik a szervezetek számára, hogy 
+ skálázható alkalmazásokat  építsenek és futtassanak modern, dinamikus
+ környezetekben, mint például a nyilvános, privát és hibrid felhők.
+ A felhőnatív rendszerek során használt legfontosabb technológiák a konténerek, 
+ a mikroszolgáltatások és az API (Application Programming Interface) -ok.
+ Ezeknél a rendszereknél kiemelten fontos a rendelkezésre állás 
+ és a rövid válaszidő mellett a megfelelő skálázódás biztosítása is.
+
+ A jelen dokumentum a AI (Mesterséges Intelligencia) alapú ágensek használatát vizsgálja 
+ felhős környezetekből kinyerhető metrikák alapján a skálázódás optimalizálására.
+ A dokumentum bemutatja egy ilyen optimalizáló rendszer tervezését és megvalósítását, illetve kiértékelését
+ különböző hatékonytalan forgatókönyvek alapján.
+
+
+
+
+
 
 
 \vfill
@@ -20,7 +40,20 @@ Jelen dokumentum egy diplomaterv sablon, amely formai keretet ad a BME Villamosm
 %----------------------------------------------------------------------------
 \chapter*{Abstract}\addcontentsline{toc}{chapter}{Abstract}
 
-This document is a \LaTeX-based skeleton for BSc/MSc~theses of students at the Electrical Engineering and Informatics Faculty, Budapest University of Technology and Economics. The usage of this skeleton is optional. It has been tested with the \emph{TeXLive} \TeX~implementation, and it requires the PDF-\LaTeX~compiler.
+In today's world, it is more and more becoming a convention for web based services, that instead
+ of server based monolithic architechture, they get deployed in a cloud based infrastructure.
+ The Cloud Native Computing Foundation's official definition states that cloud native technologies give the
+ ability to organizations to develop and deploy scalable applications in modern, dynamic envrionments, for example
+ public, private and hybrid clouds.
+ These cloud native systems typically utilize containers, microservices and APIs (Application Programming Interfaces).
+ With these systems, ensuring proper scalability is paramount, alongside with high availability and low latency.
+
+ This document investigates the use of AI (Artificial Intelligence) agents 
+ for scaling optimization based on metrics that describe the cloud environment.
+ The document showcases the design and implementation of such an optimization system 
+ and evaluates its performance under various inefficient scenarios.
+    
+
 
 
 \vfill
