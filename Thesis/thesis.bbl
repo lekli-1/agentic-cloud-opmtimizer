@@ -93,61 +93,23 @@
 \def\bibInSelf#1{In u\H{o}: }
 \csname bibOverride\endcsname
 
-\bibitem{DipPortal}
-{Budapesti Műszaki és Gazdaságtudományi Egyetem Villamosmérnöki és
-  Informatikai Kar}:
-\bibNewBlock Diplomaterv portál (2011. február 26.).
-\bibNewBlock \url{http://diplomaterv.vik.bme.hu/}.
-
-\bibitem{Candy86}
-James~C. Candy:
-\bibNewBlock Decimation for sigma delta modulation.
-\bibNewBlock 34. \'evf. (1986.\ 01) 1. sz., 72--76.~p.
-\bibNewBlock \doi{10.1109/TCOM.1986.1096432}.
-
 \bibitem{CNCF}
 {Cloud Native Computing Foundation}:
 \bibNewBlock Cloud native computing foundation definition.
 \bibNewBlock \url{https://github.com/cncf/toc/blob/main/DEFINITION.md}, 2026.
 
-\bibitem{Jeney}
-Gábor Jeney:
-\bibNewBlock Hogyan néz ki egy igényes dokumentum? {N}éhány szóban az
-  alapvető tipográfiai szabályokról, 2014.
-\bibNewBlock \url{http://www.mcl.hu/~jeneyg/kinezet.pdf}.
-
-\bibitem{KissPhD}
-Peter Kiss:
-\bibNewBlock Adaptive digital compensation of analog circuit imperfections for
-  cascaded delta-sigma analog-to-digital converters, 2000.\ 04.
-
-\bibitem{Lee87}
-Wai~L. Lee\bibAnd 1Charles~G. Sodini:
-\bibNewBlock A topology for higher order interpolative coders.
-\bibNewBlock In {\em Proc.\ of the IEEE International Symposium on Circuits and
-  Systems} (kon\-fe\-ren\-cia\-anyag).
-\bibNewBlock 1987.\ 4-7~05., 459--462.~p.
-
-\bibitem{Mkrtychev:1997}
-Alexey Mkrtychev:
-\bibNewBlock Models for the logic of proofs.
-\bibNewBlock In Sergei Adian\bibAnd 1Anil Nerode\bibEd 1: {\em Logical
-  Foundations of Computer Science}.
-\bibNewBlock Lecture Notes in Computer Science sorozat, \bibVolume {1234.}.
-\bibNewBlock 1997, Springer Berlin Heidelberg, 266--275.~p.
-\bibNewBlock ISBN 978-3-540-63045-6.
+\bibitem{NEURIPS2020_6b493230}
+Patrick Lewis\bibAnd 0Ethan Perez\bibAnd 0Aleksandra Piktus\bibAnd 0Fabio
+  Petroni\bibAnd 0Vladimir Karpukhin\bibAnd 0Naman Goyal\bibAnd 0Heinrich
+  K\"{u}ttler\bibAnd 0Mike Lewis\bibAnd 0Wen-tau Yih\bibAnd 0Tim
+  Rockt\"{a}schel\bibAnd 0Sebastian Riedel\bibAnd 2Douwe Kiela:
+\bibNewBlock Retrieval-augmented generation for knowledge-intensive nlp tasks.
+\bibNewBlock In H.~Larochelle\bibAnd 0M.~Ranzato\bibAnd 0R.~Hadsell\bibAnd
+  0M.F. Balcan\bibAnd 2H.~Lin\bibEd 1: {\em Advances in Neural Information
+  Processing Systems} (kon\-fe\-ren\-cia\-anyag), \bibVolume {33.}.
+\bibNewBlock 2020, Curran Associates, Inc., 9459--9474.~p.
 \bibNewBlock
-\bibUrll{URL} >http://dx.doi.org/10.1007/3-540-63045-7_27>.
-
-\bibitem{Schreier00}
-Richard Schreier:
-\bibNewBlock {\em The Delta-Sigma Toolbox v5.2}.
-\bibNewBlock Oregon State University, 2000.\ 01.
-\bibNewBlock \url{http://www.mathworks.com/matlabcentral/fileexchange/}.
-
-\bibitem{Wettl04}
-Ferenc Wettl\bibAnd 0Gyula Mayer\bibAnd 2Péter Szabó:
-\bibNewBlock {\em \LaTeX~kézikönyv}.
-\bibNewBlock 2004, Panem Könyvkiadó.
+\bibUrll{URL} >https://proceedings.neurips.cc/paper_files/paper/2020/file/
+  6b493230205f780e1bc26945df7481e5-Paper.pdf>.
 
 \end{thebibliography}

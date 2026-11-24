@@ -6,9 +6,63 @@ A bevezető tartalmazza a diplomaterv-kiírás elemzését, történelmi előzm�
 
 A bevezető szokás szerint a diplomaterv felépítésével záródik, azaz annak rövid leírásával, hogy melyik fejezet mivel foglalkozik.
 
+A mai világban egyre jobban terjed el, hogy az interneten elérhető szolgáltatások
+ szerver alapú monolítikus architektúra helyett felhő alapú 
+ infrastruktúrában kerülnek üzembehelyezésre.
+ A Cloud Native Computing Foundation (CNCF) hivatalos definíciója \cite{CNCF} szerint
+ a felhőnatív technológiák lehetővé teszik a szervezetek számára, hogy 
+ skálázható alkalmazásokat  építsenek és futtassanak modern, dinamikus
+ környezetekben, mint például a nyilvános, privát és hibrid felhők.
+ A felhőnatív rendszerek során használt legfontosabb technológiák a konténerek, 
+ a mikroszolgáltatások és az API (Application Programming Interface) -ok.
+ Ezeknél a rendszereknél kiemelten fontos a rendelkezésre állás 
+ és a rövid válaszidő mellett a megfelelő skálázódás biztosítása is.
+
+ Számomra kifejezetten érdekesnek tűnt az a gondolat, hogy vajon egy ilyen felhőnatív
+ applikáció optimalizálása és a generatív MI alapú ágensek ötvözése hogyan állna össze.
+ Mindkét téma mélyen foglalkoztat engem, ezért úgy döntöttem, hogy a szakdolgozatomat erről fogom írni.
+
+ Korábban az önálló laboratórium tantárgyból foglalkoztam felhő natív alkalmazásfejlesztéssel,
+ akkor az általam választott feladat az volt, hogy megismerkedjek a felhőnatív architektúra 
+ elemeivel, azzal, hogy milyen eszközök, technológiák állnak rendelkezésre a népszerű felhőszolgáltatók 
+ által és mindezek alapján fejleszteni egy konkrét alkalmazást.
+ Akkoriban, hosszas és nehéz ötletelés után végül a következőt találtam ki.
+ Egy weboldalra könnyen beágyazható kisalkalmazás, 
+ csevegőfelület, ahol egy mesterséges intelligenciát használó csevegőrobottal lehet 
+ beszélgetést folytatni, ügyfélszolgálati kérdéseket feltenni. Fontos kitétel volt,
+ hogy a robot releváns és hiteles információkkal szolgáljon, ami úgy elérendő,
+ hogy a robot rendelkezik egy tudásbázissal, névlegesen egy vektor adatbázissal,
+ amiből kinyeri ezeket az információkat.
+ Ezt a robotot és a hozzá tartozó komponenseket a felhő natív elveknek megfelelően egy
+ felhőszolgáltatónál kellett üzembe helyezni.
+
+ Az imént említett önálló labor során fejlesztett alkalmazás technológiái és infrastruktúrája miatt nagy mértékben
+ lesz releváns ebben a dokumentumban található felhőoptimalizáló rendszerhez, ugyanis a felhő natív elvek itt is nagy
+ szerepet fognak játszani az implementáció során, főként a konténerek és ezek okresztrációi, majd a Microsoft Azure
+ felhőszoltató itt is meg fog jelenni, mind az optimalizálónál, mind a különböző forgatókönyveket bemutató tervezetten
+ nem hatékony próba alkalmazásoknál.
+ Továbbá, szintén visszaköszön az ágensél, ami az optimalizálási döntéseket fogja hozni és végrehajtani is, szintén egy
+ generatív MI alapú nagy nyelvi modellel működik, hasonló módon mint a csevegőrobot alkalmazásnál.
+ 
+ Visszatérve a felhő natív alkalmazás architektúrára, használatával olyan rendszereket hozhatunk létre,
+ amelyek komponensei lazán csatlakoznak egymáshoz, így könnyen lehet változtatásokat implementálni bennük, 
+ jól menedzselhetőek és megfigyelhetőek.
+ Az 1.1. ábrán látszik az elvi különbség a monolitikus és a felhő natív architektúra között, pontosabban az,
+hogy egyszerűsítve hogyan épül fel egy felhő natív alkalmazás egy monolitikushoz képest.
+
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.7\textwidth]{figures/mermaid-cloud_vs_monolith.png}
-  \caption{Cloud vs Monolith Architecture}
+  \caption{Monolítikus és felhő natív architektúra összehasonlítása}
   \label{fig:cloud-vs-monolith}
 \end{figure}
+
+Most, hogy már egy egyszerű alapképet kaptunk a felhőnatív alkalmazások világába, térjünk át
+a kiírt feladat pontjaira. A következőktben mélyebben be fogom mutatni a felhőnatív architektúrák alapelveit,
+vizsgálni fogom a MI ágens alapú rendszerek működését az infrastruktúrális döntéshozatalban,
+bemutatom a megvalósított döntéshozó rendszer tervezési és implementálási folyamatát,
+részletesen ismertetni fogom a felhasznált technológiákat és az alkalmazásuk indokát,
+továbbá szó lesz a rendszer kiértékeléséről, illetve ezen dolgozat dokumentációul is fog szolgálni
+a félév során végzett munkámról.
+
+---- Rövid Felépítés ----

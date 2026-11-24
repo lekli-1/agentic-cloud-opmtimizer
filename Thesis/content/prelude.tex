@@ -1,0 +1,72 @@
+%----------------------------------------------------------------------------
+\chapter{Előzmények}
+%----------------------------------------------------------------------------
+Korábban említettem, hogy önálló labor tantárgy kerertein belül foglalkoztam
+a felhő natív architektúra elemeivel egy konkrét webapplikáció fejlesztése révén,
+amely egy weboldalra könnyen beágyazható csevegőrobotot takart. Az akkori
+feladat során mély betekintést nyertem a felhőnatív applikációk világába, illetve
+a nagy nyelvi modellek használatába. A korábbi és ezen projekt között sok átfedés
+van a használt technológiák terén. Az egyik ilyen legfontosabb átfedő elem az API.
+
+A csevegőrobot rendszer működésének központi elemét az API alkotja,
+amely hídként szolgál az elosztott programkomponensek között.
+Ez a felület felel a beérkező klienskérések fogadásáért, érvényesítéséért és a 
+megfelelő háttérszolgáltatásokhoz történő irányításáért. 
+Gyakorlati szempontból az API az a csomópont, amely a tényleges 
+felhasználói interakciókat kezeli: ezeken a végpontokon keresztül történik például a 
+csevegőrobotnak küldött üzenetek fogadása,
+majd a generált válaszok visszatovábbítása a felhasználó felé. Ugyancsak ez a komponens
+biztosítja a tudásbázis adminisztrációs háttérműveleteit is, ideértve az új dokumentumok
+névlegesen PDF-ek (Portable Document Format) feltöltését, azok feldolgozását, valamint a 
+későbbi információs lekérdezések lebonyolítását.
+Emellett az adatközvetítés szabványosított JSON (JavaScript Object Notation ) formátumban,
+aszinkron, másnéven nem blokkoló hívásokon keresztül történik, ami lehetővé teszi, hogy a rendszer
+párhuzamosan több kérést is kiszolgáljon, ez
+javíthatja a rendszer teljesítményét az olyan időigényes háttérfolyamatoknál is, 
+mint a nagy méretű PDF dokumentumok feldolgozása vagy a nagy nyelvi modellel való 
+kommunikáció.
+
+Az általam megvalósított felhőoptimalizáló rendszerben az API a felhasználói felület
+és az alkalmazás háttérlogikája közötti kapcsolatot 
+biztosítja. Ezen keresztül lehet lekérdezni a megfigyelt alkalmazások állapotát, 
+az optimalizálási javaslatokat és a korábbi műveletek eredményeit. Szintén ezen 
+a felületen keresztül érkeznek a felhasználói kérések, például egy új elemzés indítása,
+egy javaslat jóváhagyása vagy elutasítása, illetve egy korábbi módosítás visszaállítása.
+Az API fogadja ezeket a kéréseket, ellenőrzi a megadott paramétereket,
+majd átadja őket a megfelelő feldolgozó résznek.
+
+Fontos különbség azonban, hogy ezek a feldolgozó részek nem önálló mikroszolgáltatásokként,
+hanem egy közös alkalmazáson belül működnek.
+A háttérlogika a megfigyelő által gyűjtött mérési adatokat használja fel,
+a nagy nyelvi modelltől optimalizálási javaslatot kér, majd felhasználói jóváhagyás után, 
+biztonsági ellenőrzések mellett módosítja az orkesztrátor által futtatott alkalmazás
+beállításait.
+
+Az API-hoz mindkét esetben a FastAPI-t használtam, amelyről majd később lesz bővebben szó.\\
+
+A két alkalmazásban egy további közös vonás valamilyen adatbázis használata,
+azonban ezek szerepe eltér egymástól. A csevegőrobot esetében a vektoradatbázis a
+tudásbázisban történő keresést segíti. Ennek célja, hogy a felhasználó kérdéséhez
+kapcsolódó információk bekerüljenek a nagy nyelvi modell számára átadott kontextusba, 
+így a válasz ne kizárólag a modell korábban megszerzett ismereteire támaszkodjon. 
+Ez csökkentheti a hallucináció jelenségét, amikor a modell olyan állításokat fogalmaz meg,
+amelyek tévesek vagy nem támaszthatók alá a rendelkezésre álló információkkal.
+
+A visszakeresés és a szöveggenerálás összekapcsolására szolgál az úgynevezett
+RAG \cite{NEURIPS2020_6b493230} (Retrieval-Augmented Generation), vagyis visszakereséssel kiegészített szöveggenerálás.
+Ennek során a csevegő rendszer először megkeresi a kérdéshez kapcsolódó információkat egy külső
+tudásforrásban, majd ezekkel egészíti ki a modell bemenetét, ezzel csökkentve a hallucináció
+fellépésének esélyét. 
+
+Az optimalizáló esetében szintén elengedhetetlen a megfelelő kontextus biztosítása,
+de ezt nem dokumentumok visszakeresésével olda meg, hanem a rendszer a megfigyelt
+alkalmazások mérési adatait, aktuális erőforrás-beállításait és az előre meghatározott
+szabályokat közvetlenül átadja modellnek egy rendszerutasítással együtt, így képezve megfelelő kontextust.
+Ezek alapján a modell konkrét optimalizálási javaslatot fogalmazhat meg.
+Az adatbázis itt elsősorban a javaslatok, a felhasznált mérési
+adatok és a végrehajtott műveletek megőrzésére szolgál, hogy a rendszer működése később is
+visszakövethető legyen.
+
+A megfelelő kontextus mellett a javaslatok ellenőrzése is fontos. A rendszer ezért külön
+ellenőrzi, hogy a modell által megadott értékek megfelelnek-e az előírt korlátoknak,
+a tényleges módosítás pedig csak felhasználói jóváhagyás után történhet meg.
