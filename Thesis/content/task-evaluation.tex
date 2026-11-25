@@ -2,3 +2,88 @@
 \chapter{A feladat értelmezése}
 %----------------------------------------------------------------------------
 
+\section{ A feladat célja és értelmezése}
+A feladat fő célja egy autonóm ágensalapú rendszer megvalósítása, amely képes erőforrás-allokációk
+értékelésére, javaslatok megfogalmazására önállóan, majd felhasználói jóváhagyással azok végrehajtására.
+
+A beavatkozási javaslat készítése egy külső nagy nyelvi modell segítségével történik,
+a futó alkalmazásokból kinyert metrikai adatok és korlátok elküldésével. A jóváhagyott változtatások végrehajtását a
+rendszer szintén egy nagy nyelvi modellel és annak eszközhasználatával végzi. A tényleges módosításokat az alkalmazás 
+által biztosított, biztonsági korlátokkal ellátott eszközök végzik.
+
+A működés vizsgálatához különböző terhelési és erőforrás-beállításokkal futó mintaalkalmazásokat definiáltam, amelyek
+segítségével túlméretezett, processzorkorlátozott és memóriakockázatos helyzeteket,
+valamint megfelelően méretezett kontrollesetet is vizsgálok.
+
+A feladatkiírásban több lehetséges vizsgált adatforrás és beavatkozási módszer szerepel.
+Az én applikációm ezek közül a processzor terhelési és memóriahasználathoz kapcsolódó adatok alapján
+az optimalizálandó alkalmazások erőforrás-beállításainak és példányszámainak megfelelő módosítására
+törekszik. Ez lehetővé teszi mind a vertikális, mind az alkalmazásszintű horizontális skálázási döntések
+vizsgálatát egy jól elkülönített próbakörnyezetben.
+
+Itt fontos megjegyezni, hogy a felhőszolgáltatónál üzembe helyezett rendszer optimalizálási változtatásai
+a bérelt virtuális gépek számát vagy méretét nem érintik, ezért
+a változtatások se nem csökkentik, se nem növelik a bérelt gépek költségét.
+
+\section{A vizsgált metrikák és a beavatkozások hatóköre}
+A CPU (Central Processing Unit) -használat azt vizsgálja, hogy az applikáció mekkora processzorkapacitást
+vesz igénybe. Itt a vizsgált mennyiség mértékegysége a millicore, amely egy CPU-mag
+kapacitásának az egy ezredét jelenti. A processzorhasználatot adott időintervallumra kiátlagoljuk, ez adja az átlagos
+CPU-használatot, illetve a fontosabb metrika a használat 95. percentilise, azaz p95 értéke. Ez az érték az, amelyet a
+vizsgált minták 95 százaléka nem lép át. Az átlaghoz képest jobban mutatja a magasabb terhelésű időszakokat, ezért ezt használjuk
+a javaslatokhoz.\\
+
+A CPU korlátozás egy olyan jelenség, ami akkor lép fel,
+ha az adott applikáció több CPU-t szeretne használni, mint amennyi a rá kiszabott maximum limit,
+ezért az alkalmazás működését a rendszer visszatartja, ami lassíthatja a működést.
+A mi esetünkben a jelenség fellépésének százalékos arányát mérjük a vizsgált időszakon belül.
+Azt, hogy a periódusok hány százalékában történt korlátozás.\\
+
+A memóriahasználat az applikáció által használt memória mennyiségét jellemzi.
+A rendszer itt a memóriacsúcsot veszi figyelembe, amely a vizsgált időszakban
+fellépő legnagyobb memóriahasználat értéke. Amennyiben ez megközelíti a kiszabott
+memórialimit értékétét, az kockázatot jelent.\\
+
+A beavatkozások hatókörébe tartoznak mind a vertikális, mind a horizontális skálázási döntések,
+ezek vertikális szempontból kimerülnek az alkalmazáspéldányok CPU- és memóriaigényeinek,
+illetve ezek korlátainak csökkentésével vagy növelésével, horizontális szempontból pedig
+az alkalmazások példányszámainak módosításával.\\
+
+A rendszer a megfigyelést és a javaslatok generálását automatikusan végzi. A javaslatokat és a hozzájuk tartozó
+mérési adatokat, illetve a végrehajtások eredményeit eltárolja és megjeleníthetővé teszi.
+A végrehajtáshoz a felhasználónak manuálisan kell jóváhagynia a javasolt változtatásokat.
+
+\section{Funkcionális követelmények}
+\begin{enumerate}
+    \item A rendszer gyűjtse és jelenítse meg a megfigyelt alkalmazások állapotát és metrikáit.
+    \item A mérési adatok és aktuális erőforrás-beállítások alapján ismerje fel a javaslatot igénylő helyzeteket.
+    \item Adjon pontos erőforrás vagy példányszám változtatási javaslatokat és jelenítse meg őket.
+    \item Adjon lehetőséget a javaslatok elfogadására és elutasítására.
+    \item Az elfogadott javaslatokban szereplő változtatásokat hajtsa végre.
+    \item A sikeresen végrehajtott válzotzatásokhoz biztosítson lehetőséget a változtatások visszaállítására.
+    \item A javaslatokat, végrehajtásokat és visszavonásokat tárolja, adjon lehetőséget azok megjelenítésére.
+\end{enumerate}
+
+\section{Kiértékelés módja}
+A kiértékelésnél 5 forgatókönyvet alapján vizsgálunk, amelyeket 4 mintalkalmazáson fogunk kiértékelni.
+A forgatókönyvek a következők:
+\begin{itemize}
+    \item \emph{cpu-hungry - vertikális skálázás} - Azt az esetet mutatja be, amikor az applikáció több CPU-t használna, mint ami allokálva van neki.
+    Itt jellemzően a korlátozás közel 100 százalékos értéket érhet el, itt a CPU allokáció növelését várjuk.
+    \item \emph{cpu-hungry - horizontális skálázás} - Ennél ugyan úgy a processzor korlátozott alkalmazást vizsgáljuk,
+    itt párhuzamos kérésekkel terheljük az appot, ezért a példányszám növelését várjuk javaslatként.
+    \item \emph{idle-app} - Ebben az esetben az allokált CPU jóval meghaladja azt a mennyiséget amelyre ennek az appnak szüksége van,
+    ezért itt jellemzően a CPU kihasználtság nagyon alacsony. Itt a CPU allokáció csökkentését várjuk javaslatként.
+    \item \emph{mem-cache} - Itt a memóriacsúcs megközelíti a kiszabott memória limitet, ezért fellép a memória 
+    elfogyásának kockázata. A várható javaslat a memória limit növelése. 
+    \item \emph{web-api} - Ez egy normál kontrollként használt eset. A CPU kihasználtsága nem túl magas, de nem is alacsony,
+    a memóriából is jelentős rész használva van, de nem közelíti meg a memóriacsúcs a limitet.
+    Itt arra számítunk, hogy nem kapunk változtatási javaslatot.
+\end{itemize}
+
+A kiértékelésnél a helyességet úgy fogjuk vizsgálni, hogy megnézzük, tényleg megfelelő javaslatot ad a rendszer,
+illetve hogy végrehajtásnál tényleg a javaslatban szereplő erőforrás-allokációk, illetve példányszám változások lépnek érvénybe.
+
+
+
+

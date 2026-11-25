@@ -42,7 +42,7 @@ a nagy nyelvi modelltől optimalizálási javaslatot kér, majd felhasználói j
 biztonsági ellenőrzések mellett módosítja az orkesztrátor által futtatott alkalmazás
 beállításait.
 
-Az API-hoz mindkét esetben a FastAPI-t használtam, amelyről majd később lesz bővebben szó.\\
+Az API-hoz mindkét esetben a FastAPI-t használtam, amelyről majd később lesz bővebben szó.
 
 A két alkalmazásban egy további közös vonás valamilyen adatbázis használata,
 azonban ezek szerepe eltér egymástól. A csevegőrobot esetében a vektoradatbázis a
@@ -53,7 +53,7 @@ Ez csökkentheti a hallucináció jelenségét, amikor a modell olyan állítás
 amelyek tévesek vagy nem támaszthatók alá a rendelkezésre álló információkkal.
 
 A visszakeresés és a szöveggenerálás összekapcsolására szolgál az úgynevezett
-RAG \cite{NEURIPS2020_6b493230} (Retrieval-Augmented Generation), vagyis visszakereséssel kiegészített szöveggenerálás.
+RAG (Retrieval-Augmented Generation) \cite{NEURIPS2020_6b493230}, vagyis visszakereséssel kiegészített szöveggenerálás.
 Ennek során a csevegő rendszer először megkeresi a kérdéshez kapcsolódó információkat egy külső
 tudásforrásban, majd ezekkel egészíti ki a modell bemenetét, ezzel csökkentve a hallucináció
 fellépésének esélyét. 
